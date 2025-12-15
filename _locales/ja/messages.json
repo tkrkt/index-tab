@@ -1,0 +1,102 @@
+{
+  "extName": {
+    "message": "Index Tab",
+    "description": "拡張機能の名前"
+  },
+  "extDescription": {
+    "message": "タブを整理するためのインデックスタブを作成",
+    "description": "拡張機能の説明"
+  },
+  "pageTitle": {
+    "message": "Index Tab - タブ一覧",
+    "description": "ページタイトル"
+  },
+  "defaultTabTitle": {
+    "message": "Index Tab",
+    "description": "デフォルトのタブタイトル"
+  },
+  "titlePlaceholder": {
+    "message": "タイトルを入力",
+    "description": "タイトル入力欄のプレースホルダー"
+  },
+  "colorBlue": {
+    "message": "青",
+    "description": "青色"
+  },
+  "colorRed": {
+    "message": "赤",
+    "description": "赤色"
+  },
+  "colorGreen": {
+    "message": "緑",
+    "description": "緑色"
+  },
+  "colorYellow": {
+    "message": "黄",
+    "description": "黄色"
+  },
+  "colorPurple": {
+    "message": "紫",
+    "description": "紫色"
+  },
+  "colorOrange": {
+    "message": "オレンジ",
+    "description": "オレンジ色"
+  },
+  "colorCyan": {
+    "message": "シアン",
+    "description": "シアン色"
+  },
+  "colorPink": {
+    "message": "ピンク",
+    "description": "ピンク色"
+  },
+  "colorGray": {
+    "message": "グレー",
+    "description": "グレー色"
+  },
+  "closeButton": {
+    "message": "閉じる",
+    "description": "閉じるボタン"
+  },
+  "closeThisTab": {
+    "message": "このIndex Tabを閉じる",
+    "description": "このIndex Tabを閉じるメニュー項目"
+  },
+  "closeAllTabs": {
+    "message": "このIndex Tabとすべての配下タブを閉じる",
+    "description": "すべてのタブを閉じるメニュー項目"
+  },
+  "loadingMessage": {
+    "message": "タブを読み込み中...",
+    "description": "読み込み中メッセージ"
+  },
+  "emptyMessage": {
+    "message": "右側にタブがありません",
+    "description": "タブがない場合のメッセージ"
+  },
+  "noTitle": {
+    "message": "タイトルなし",
+    "description": "タイトルがない場合の表示"
+  },
+  "dragToReorder": {
+    "message": "ドラッグで並び替え",
+    "description": "ドラッグハンドルのツールチップ"
+  },
+  "addNewTabAfter": {
+    "message": "このタブの後ろに新規タブを作成",
+    "description": "新規タブ追加ボタンのツールチップ"
+  },
+  "addIndexTabHere": {
+    "message": "ここにIndex Tabを追加",
+    "description": "Index Tab追加ボタンのツールチップ"
+  },
+  "closeTab": {
+    "message": "タブを閉じる",
+    "description": "タブを閉じるボタンのツールチップ"
+  },
+  "confirmCloseAll": {
+    "message": "このIndex Tabとその配下のすべてのタブを閉じますか?\nこの操作は取り消せません。",
+    "description": "すべてのタブを閉じる確認ダイアログ"
+  }
+}

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title data-i18n="pageTitle">Index Tab - タブ一覧</title>
+    <link rel="icon" type="image/svg+xml" href="" />
+    <link rel="stylesheet" href="tabs.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div id="indexTabBar" class="index-tab-bar">
+        <!-- タブバーがここに動的に生成される -->
+      </div>
+      <div class="header">
+        <div class="title-nav">
+          <input
+            type="text"
+            id="pageTitle"
+            class="page-title-input"
+            value="Index Tab"
+            data-i18n-placeholder="titlePlaceholder"
+            placeholder="タイトルを入力"
+          />
+        </div>
+        <div class="color-picker">
+          <button
+            class="color-button"
+            data-color="#4285f4"
+            style="background-color: #4285f4"
+            data-i18n-title="colorBlue"
+            title="青"
+          ></button>
+          <button
+            class="color-button"
+            data-color="#ea4335"
+            style="background-color: #ea4335"
+            data-i18n-title="colorRed"
+            title="赤"
+          ></button>
+          <button
+            class="color-button"
+            data-color="#34a853"
+            style="background-color: #34a853"
+            data-i18n-title="colorGreen"
+            title="緑"
+          ></button>
+          <button
+            class="color-button"
+            data-color="#fbbc04"
+            style="background-color: #fbbc04"
+            data-i18n-title="colorYellow"
+            title="黄"
+          ></button>
+          <button
+            class="color-button"
+            data-color="#9334e6"
+            style="background-color: #9334e6"
+            data-i18n-title="colorPurple"
+            title="紫"
+          ></button>
+          <button
+            class="color-button"
+            data-color="#ff6d01"
+            style="background-color: #ff6d01"
+            data-i18n-title="colorOrange"
+            title="オレンジ"
+          ></button>
+          <button
+            class="color-button"
+            data-color="#46bdc6"
+            style="background-color: #46bdc6"
+            data-i18n-title="colorCyan"
+            title="シアン"
+          ></button>
+          <button
+            class="color-button"
+            data-color="#f439a0"
+            style="background-color: #f439a0"
+            data-i18n-title="colorPink"
+            title="ピンク"
+          ></button>
+          <button
+            class="color-button"
+            data-color="#666666"
+            style="background-color: #666666"
+            data-i18n-title="colorGray"
+            title="グレー"
+          ></button>
+        </div>
+        <div class="close-dropdown">
+          <button id="closeDropdownButton" class="close-dropdown-button" data-i18n-title="closeButton" title="閉じる">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 6 L8 10 L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div id="closeDropdownMenu" class="close-dropdown-menu">
+            <button class="close-dropdown-item" data-action="close-tab" data-i18n="closeThisTab">このIndex Tabを閉じる</button>
+            <button class="close-dropdown-item" data-action="close-all" data-i18n="closeAllTabs">このIndex Tabとすべての配下タブを閉じる</button>
+          </div>
+        </div>
+      </div>
+      <div id="tabList" class="tab-list">
+        <p class="loading" data-i18n="loadingMessage">タブを読み込み中...</p>
+      </div>
+    </div>
+    <script src="tabs.js"></script>
+  </body>
+</html>

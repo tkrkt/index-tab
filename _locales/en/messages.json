@@ -1,0 +1,102 @@
+{
+  "extName": {
+    "message": "Index Tab",
+    "description": "Extension name"
+  },
+  "extDescription": {
+    "message": "Create index tabs to organize your tabs",
+    "description": "Extension description"
+  },
+  "pageTitle": {
+    "message": "Index Tab - Tab List",
+    "description": "Page title"
+  },
+  "defaultTabTitle": {
+    "message": "Index Tab",
+    "description": "Default tab title"
+  },
+  "titlePlaceholder": {
+    "message": "Enter title",
+    "description": "Title input placeholder"
+  },
+  "colorBlue": {
+    "message": "Blue",
+    "description": "Blue color"
+  },
+  "colorRed": {
+    "message": "Red",
+    "description": "Red color"
+  },
+  "colorGreen": {
+    "message": "Green",
+    "description": "Green color"
+  },
+  "colorYellow": {
+    "message": "Yellow",
+    "description": "Yellow color"
+  },
+  "colorPurple": {
+    "message": "Purple",
+    "description": "Purple color"
+  },
+  "colorOrange": {
+    "message": "Orange",
+    "description": "Orange color"
+  },
+  "colorCyan": {
+    "message": "Cyan",
+    "description": "Cyan color"
+  },
+  "colorPink": {
+    "message": "Pink",
+    "description": "Pink color"
+  },
+  "colorGray": {
+    "message": "Gray",
+    "description": "Gray color"
+  },
+  "closeButton": {
+    "message": "Close",
+    "description": "Close button"
+  },
+  "closeThisTab": {
+    "message": "Close this Index Tab",
+    "description": "Close this Index Tab menu item"
+  },
+  "closeAllTabs": {
+    "message": "Close this Index Tab and all child tabs",
+    "description": "Close all tabs menu item"
+  },
+  "loadingMessage": {
+    "message": "Loading tabs...",
+    "description": "Loading message"
+  },
+  "emptyMessage": {
+    "message": "No tabs on the right",
+    "description": "Empty message"
+  },
+  "noTitle": {
+    "message": "No title",
+    "description": "No title display"
+  },
+  "dragToReorder": {
+    "message": "Drag to reorder",
+    "description": "Drag handle tooltip"
+  },
+  "addNewTabAfter": {
+    "message": "Create new tab after this",
+    "description": "Add new tab button tooltip"
+  },
+  "addIndexTabHere": {
+    "message": "Add Index Tab here",
+    "description": "Add Index Tab button tooltip"
+  },
+  "closeTab": {
+    "message": "Close tab",
+    "description": "Close tab button tooltip"
+  },
+  "confirmCloseAll": {
+    "message": "Close this Index Tab and all its child tabs?\nThis action cannot be undone.",
+    "description": "Confirm close all dialog"
+  }
+}
