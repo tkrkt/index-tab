@@ -1,5 +1,8 @@
-
 # Index Tab
+
+![img](./assets/screenshot.png)
+
+[Chrome Web Store](https://chromewebstore.google.com/detail/index-tab/dneggdglpefjpkagkekhgjkanallhagk)
 
 Create index tabs to organize your tabs
 
