@@ -102,5 +102,13 @@
   "commandCreateIndexTab": {
     "message": "Create a new Index Tab at the current position",
     "description": "Description for the create Index Tab command"
+  },
+  "commandGoToLeftIndexTab": {
+    "message": "Go to the left Index Tab",
+    "description": "Description for the go to left Index Tab command"
+  },
+  "commandGoToRightIndexTab": {
+    "message": "Go to the right Index Tab",
+    "description": "Description for the go to right Index Tab command"
   }
 }
