@@ -98,5 +98,9 @@
   "confirmCloseAll": {
     "message": "Close this Index Tab and all its child tabs?\nThis action cannot be undone.",
     "description": "Confirm close all dialog"
+  },
+  "commandCreateIndexTab": {
+    "message": "Create a new Index Tab at the current position",
+    "description": "Description for the create Index Tab command"
   }
 }

@@ -98,5 +98,9 @@
   "confirmCloseAll": {
     "message": "このIndex Tabとその配下のすべてのタブを閉じますか?\nこの操作は取り消せません。",
     "description": "すべてのタブを閉じる確認ダイアログ"
+  },
+  "commandCreateIndexTab": {
+    "message": "現在の位置にIndex Tabを作成",
+    "description": "Index Tab作成コマンドの説明"
   }
 }

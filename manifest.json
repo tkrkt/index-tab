@@ -8,6 +8,14 @@
     "tabs",
     "storage"
   ],
+  "commands": {
+    "create-index-tab": {
+      "description": "__MSG_commandCreateIndexTab__"
+    },
+    "go-to-left-index-tab": {
+      "description": "__MSG_commandGoToLeftIndexTab__"
+    }
+  },
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",
