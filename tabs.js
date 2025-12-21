@@ -1626,13 +1626,13 @@ function setupTabListeners() {
 // ページがフォーカスされたときの処理
 function setupWindowListeners() {
   window.addEventListener("focus", async () => {
-    // サイドパネルでは「初回クリック＝フォーカス取得」になることがあり、
-    // focus直後にDOMを再描画すると mousedown〜mouseup 間に要素が差し替わって
-    // click が発火しないことがある。
-    // そのためサイドパネル時のみ少し遅延して更新する。
-    const delayMs = (await isSidePanelContext()) ? 150 : 0;
-    scheduleUpdateTabList(delayMs);
-    scheduleUpdateIndexTabBar(delayMs);
+    // サイドパネルでは「初回クリック＝フォーカス取得」になりやすく、
+    // focus直後の再描画で mousedown〜mouseup 間に要素が差し替わると click が失われる。
+    // またドラッグ中に再描画されるとD&Dが破綻するため、サイドパネル時は focus 起点の更新を行わない。
+    if (await isSidePanelContext()) return;
+
+    scheduleUpdateTabList(0);
+    scheduleUpdateIndexTabBar(0);
   });
 }
 
