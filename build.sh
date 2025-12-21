@@ -4,8 +4,12 @@
 
 # 出力先ディレクトリ
 OUTPUT_DIR="dist"
-# ZIPファイル名
-ZIP_NAME="index-tab.zip"
+
+# manifest.jsonからバージョンを取得
+VERSION=$(grep '"version"' manifest.json | sed 's/.*"version": "\(.*\)".*/\1/')
+
+# ZIPファイル名にバージョンを含める
+ZIP_NAME="index-tab-v${VERSION}.zip"
 
 # 作業ディレクトリを取得
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
