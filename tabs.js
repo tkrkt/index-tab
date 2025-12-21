@@ -845,6 +845,18 @@ async function updateIndexTabBar() {
         await activateTab(targetTabId);
       });
 
+      // マウス中央クリック（ホイールクリック）でそのIndex Tabだけ閉じる（配下のタブは閉じない）
+      tabElement.addEventListener("auxclick", async (e) => {
+        if (e.button !== 1) return;
+
+        // ドラッグ操作と競合しないよう、ドラッグ中は無視
+        if (tabElement.classList.contains("dragging")) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        await closeTab(targetTabId);
+      });
+
       // アクティブなIndex Tabの場合のみ、ドラッグ&ドロップイベントを設定
       if (tabData.isActive) {
         // ドラッグ開始イベント
