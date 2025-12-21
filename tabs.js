@@ -1624,9 +1624,15 @@ function setupTabListeners() {
 
 // ページがフォーカスされたときの処理
 function setupWindowListeners() {
-  window.addEventListener("focus", () => {
-    scheduleUpdateTabList(0);
-    scheduleUpdateIndexTabBar(0);
+  window.addEventListener("focus", async () => {
+    // サイドパネルでは「初回クリック＝フォーカス取得」になることがあり、
+    // focus直後にDOMを再描画すると mousedown〜mouseup 間に要素が差し替わって
+    // click が発火しないことがある。
+    // そのためサイドパネル時のみ少し遅延して更新する。
+    const currentTab = await chrome.tabs.getCurrent();
+    const delayMs = currentTab ? 0 : 150;
+    scheduleUpdateTabList(delayMs);
+    scheduleUpdateIndexTabBar(delayMs);
   });
 }
 
