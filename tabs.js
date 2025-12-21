@@ -83,6 +83,12 @@ async function getCurrentIndexTab() {
   }
 }
 
+// サイドパネルかどうかを判定する（サイドパネルでは tabs.getCurrent() が null を返す）
+async function isSidePanelContext() {
+  const currentTab = await chrome.tabs.getCurrent();
+  return !currentTab;
+}
+
 // i18n対応: HTMLの要素を翻訳する関数
 function initI18n() {
   // data-i18n属性を持つ要素のテキストコンテンツを翻訳
@@ -1124,10 +1130,8 @@ async function getRightTabs() {
       // サイドパネルで「左にIndex Tabがない」場合は、
       // 最左のIndex Tabより左にあるタブ一覧を表示する。
       // Index Tabが1つもない場合は、すべてのタブを表示する。
-      const currentTab = await chrome.tabs.getCurrent();
-
       // Index Tabページ側（getCurrent()が取れる）では従来通り
-      if (currentTab) {
+      if (!(await isSidePanelContext())) {
         hideHeaderForCurrentTabList = false;
         return [];
       }
@@ -1178,8 +1182,7 @@ async function activateTab(tabId) {
   try {
     // サイドパネルからのタブ切り替えは、ブラウザによってはフォーカスが当たらず
     // 「効かない」ように見えることがあるため、ウィンドウも明示的にフォーカスする
-    const currentTab = await chrome.tabs.getCurrent();
-    if (!currentTab) {
+    if (await isSidePanelContext()) {
       const tab = await chrome.tabs.get(tabId);
       if (tab && typeof tab.windowId === "number") {
         await chrome.windows.update(tab.windowId, { focused: true });
@@ -1594,9 +1597,7 @@ function setupTabListeners() {
   // タブがアクティブになったとき
   chrome.tabs.onActivated.addListener(async () => {
     // サイドパネルかどうかを判定（getCurrent()がnullならサイドパネル）
-    const currentTab = await chrome.tabs.getCurrent();
-
-    if (!currentTab) {
+    if (await isSidePanelContext()) {
       // サイドパネルの場合は、getCurrentIndexTab()が変わったかチェック
       const currentIndexTab = await getCurrentIndexTab();
       const currentIndexTabId = currentIndexTab ? currentIndexTab.id : null;
@@ -1629,8 +1630,7 @@ function setupWindowListeners() {
     // focus直後にDOMを再描画すると mousedown〜mouseup 間に要素が差し替わって
     // click が発火しないことがある。
     // そのためサイドパネル時のみ少し遅延して更新する。
-    const currentTab = await chrome.tabs.getCurrent();
-    const delayMs = currentTab ? 0 : 150;
+    const delayMs = (await isSidePanelContext()) ? 150 : 0;
     scheduleUpdateTabList(delayMs);
     scheduleUpdateIndexTabBar(delayMs);
   });
