@@ -110,5 +110,56 @@
   "commandGoToRightIndexTab": {
     "message": "Go to the right Index Tab",
     "description": "Description for the go to right Index Tab command"
+  },
+  "toggleSidePanel": {
+    "message": "Open side panel",
+    "description": "Toggle side panel button tooltip"
+  },
+  "sidePanelTitle": {
+    "message": "Index Tab - Side Panel",
+    "description": "Side panel title"
+  },
+  "settingsTitle": {
+    "message": "Settings",
+    "description": "Settings modal title"
+  },
+  "settings": {
+    "message": "Settings",
+    "description": "Settings button tooltip"
+  },
+  "iconClickActionLabel": {
+    "message": "Action when clicking extension icon",
+    "description": "Icon click action setting label"
+  },
+  "iconClickActionCreateTab": {
+    "message": "Open Index Tab at current position",
+    "description": "Icon click action: create tab"
+  },
+  "iconClickActionOpenSidePanel": {
+    "message": "Open side panel",
+    "description": "Icon click action: open side panel"  },
+  "noIndexTabMessage": {
+    "message": "No Index Tab found on the left",
+    "description": "Message when no Index Tab exists on the left"
+  },
+  "noIndexTabBarMessage": {
+    "message": "No Index Tab",
+    "description": "Message when no Index Tab exists in the tab bar"
+  },
+  "createIndexTabAtStart": {
+    "message": "Create Index Tab at leftmost position",
+    "description": "Button to create Index Tab at the leftmost position"
+  },
+  "createIndexTabAtCurrent": {
+    "message": "Create Index Tab at current position",
+    "description": "Button to create Index Tab at current position"
+  },
+  "newIndexTabColorLabel": {
+    "message": "Color for new Index Tab",
+    "description": "Label for new Index Tab color setting"
+  },
+  "newIndexTabColorRotate": {
+    "message": "Rotate colors",
+    "description": "Option to rotate colors"
   }
 }

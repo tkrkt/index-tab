@@ -23,6 +23,81 @@
             placeholder="タイトルを入力"
           />
         </div>
+        <div class="color-picker-dropdown">
+          <button
+            id="colorPickerDropdownButton"
+            class="color-picker-dropdown-button"
+            data-i18n-title="selectColor"
+            title="色を選択"
+          >
+            <span class="color-indicator" id="colorIndicator"></span>
+          </button>
+          <div id="colorPickerDropdownMenu" class="color-picker-dropdown-menu">
+            <button
+              class="color-button-dropdown"
+              data-color="#4285f4"
+              style="background-color: #4285f4"
+              data-i18n-title="colorBlue"
+              title="青"
+            ></button>
+            <button
+              class="color-button-dropdown"
+              data-color="#ea4335"
+              style="background-color: #ea4335"
+              data-i18n-title="colorRed"
+              title="赤"
+            ></button>
+            <button
+              class="color-button-dropdown"
+              data-color="#34a853"
+              style="background-color: #34a853"
+              data-i18n-title="colorGreen"
+              title="緑"
+            ></button>
+            <button
+              class="color-button-dropdown"
+              data-color="#fbbc04"
+              style="background-color: #fbbc04"
+              data-i18n-title="colorYellow"
+              title="黄"
+            ></button>
+            <button
+              class="color-button-dropdown"
+              data-color="#9334e6"
+              style="background-color: #9334e6"
+              data-i18n-title="colorPurple"
+              title="紫"
+            ></button>
+            <button
+              class="color-button-dropdown"
+              data-color="#ff6d01"
+              style="background-color: #ff6d01"
+              data-i18n-title="colorOrange"
+              title="オレンジ"
+            ></button>
+            <button
+              class="color-button-dropdown"
+              data-color="#46bdc6"
+              style="background-color: #46bdc6"
+              data-i18n-title="colorCyan"
+              title="シアン"
+            ></button>
+            <button
+              class="color-button-dropdown"
+              data-color="#f439a0"
+              style="background-color: #f439a0"
+              data-i18n-title="colorPink"
+              title="ピンク"
+            ></button>
+            <button
+              class="color-button-dropdown"
+              data-color="#666666"
+              style="background-color: #666666"
+              data-i18n-title="colorGray"
+              title="グレー"
+            ></button>
+          </div>
+        </div>
         <div class="color-picker">
           <button
             class="color-button"
@@ -88,15 +163,51 @@
             title="グレー"
           ></button>
         </div>
-        <div class="close-dropdown">
-          <button id="closeDropdownButton" class="close-dropdown-button" data-i18n-title="closeButton" title="閉じる">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M4 6 L8 10 L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <div class="menu-dropdown">
+          <button
+            id="menuDropdownButton"
+            class="menu-dropdown-button"
+            data-i18n-title="menu"
+            title="メニュー"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 6 L8 10 L12 6"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
             </svg>
           </button>
-          <div id="closeDropdownMenu" class="close-dropdown-menu">
-            <button class="close-dropdown-item" data-action="close-tab" data-i18n="closeThisTab">このIndex Tabを閉じる</button>
-            <button class="close-dropdown-item" data-action="close-all" data-i18n="closeAllTabs">このIndex Tabとすべての配下タブを閉じる</button>
+          <div id="menuDropdownMenu" class="menu-dropdown-menu">
+            <button
+              class="menu-dropdown-item"
+              data-action="toggle-sidepanel"
+              data-i18n="toggleSidePanel"
+            >
+              サイドパネルを開く
+            </button>
+            <button
+              class="menu-dropdown-item"
+              data-action="close-tab"
+              data-i18n="closeThisTab"
+            >
+              このIndex Tabを閉じる
+            </button>
+            <button
+              class="menu-dropdown-item"
+              data-action="close-all"
+              data-i18n="closeAllTabs"
+            >
+              このIndex Tabとすべての配下タブを閉じる
+            </button>
           </div>
         </div>
       </div>
@@ -104,6 +215,80 @@
         <p class="loading" data-i18n="loadingMessage">タブを読み込み中...</p>
       </div>
     </div>
+
+    <!-- 設定ボタン（Index Tabページのみ表示） -->
+    <button
+      id="settingsButton"
+      class="settings-button"
+      data-i18n-title="settings"
+      title="設定"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        fill="currentColor"
+        class="bi bi-gear"
+        viewBox="0 0 16 16"
+      >
+        <path
+          d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492M5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0"
+        />
+        <path
+          d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115z"
+        />
+      </svg>
+    </button>
+
+    <!-- 設定モーダル -->
+    <div id="settingsModal" class="settings-modal">
+      <div id="settingsPopup" class="settings-popup">
+        <div class="settings-header">
+          <h3 data-i18n="settingsTitle">設定</h3>
+          <button id="closeSettingsButton" class="close-settings-button">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 4 L12 12 M12 4 L4 12"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <div class="settings-content">
+          <div class="setting-item">
+            <label for="iconClickAction" class="setting-label" data-i18n="iconClickActionLabel">拡張機能アイコンをクリックしたときの動作</label>
+            <select id="iconClickAction" class="setting-select">
+              <option value="createTab" data-i18n="iconClickActionCreateTab">現在の位置にIndex Tabを開く</option>
+              <option value="openSidePanel" data-i18n="iconClickActionOpenSidePanel">Index Tabサイドパネルを開く</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label for="newIndexTabColor" class="setting-label" data-i18n="newIndexTabColorLabel">新しいIndex Tabの色</label>
+            <select id="newIndexTabColor" class="setting-select">
+              <option value="rotate" data-i18n="newIndexTabColorRotate">順番に変える</option>
+              <option value="#4285f4" data-i18n="colorBlue">青</option>
+              <option value="#ea4335" data-i18n="colorRed">赤</option>
+              <option value="#34a853" data-i18n="colorGreen">緑</option>
+              <option value="#fbbc04" data-i18n="colorYellow">黄</option>
+              <option value="#9334e6" data-i18n="colorPurple">紫</option>
+              <option value="#ff6d01" data-i18n="colorOrange">オレンジ</option>
+              <option value="#46bdc6" data-i18n="colorCyan">シアン</option>
+              <option value="#f439a0" data-i18n="colorPink">ピンク</option>
+              <option value="#666666" data-i18n="colorGray">グレー</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script src="tabs.js"></script>
   </body>
 </html>

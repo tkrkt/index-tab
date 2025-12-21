@@ -4,9 +4,15 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
     Ubuntu, Cantarell, sans-serif;
   background-color: #f5f5f5;
+  height: 100vh;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .container {
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
   max-width: 800px;
   margin: 0 auto;
   background-color: white;
@@ -25,6 +31,16 @@ body {
   white-space: nowrap;
   min-height: 40px;
   align-items: center;
+  flex-shrink: 0;
+}
+
+.index-tab-bar-empty {
+  flex: 1;
+  padding: 0 16px;
+  text-align: center;
+  color: #666;
+  font-size: 13px;
+  user-select: none;
 }
 
 .index-tab {
@@ -52,7 +68,7 @@ body {
 }
 
 .index-tab.drag-over-left::before {
-  content: '';
+  content: "";
   position: absolute;
   left: -2px;
   top: 0;
@@ -64,7 +80,7 @@ body {
 }
 
 .index-tab.drag-over-right::after {
-  content: '';
+  content: "";
   position: absolute;
   right: -2px;
   top: 0;
@@ -129,18 +145,41 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   gap: 20px;
   flex-wrap: wrap;
   padding: 20px 20px 0 20px;
 }
 
-.close-dropdown {
+.menu-dropdown {
   position: relative;
   display: inline-block;
 }
 
-.close-dropdown-button {
+.toggle-sidepanel-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e0e0e0;
+  background-color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s, border-color 0.2s;
+  color: #666;
+  font-size: 18px;
+  font-weight: bold;
+  margin-right: 8px;
+  letter-spacing: -2px;
+}
+
+.toggle-sidepanel-btn:hover {
+  background-color: #f5f5f5;
+  border-color: #d0d0d0;
+}
+
+.menu-dropdown-button {
   width: 32px;
   height: 32px;
   border: 1px solid #e0e0e0;
@@ -154,17 +193,17 @@ body {
   color: #666;
 }
 
-.close-dropdown-button:hover {
+.menu-dropdown-button:hover {
   background-color: #f5f5f5;
   border-color: #d0d0d0;
 }
 
-.close-dropdown-button.active {
+.menu-dropdown-button.active {
   background-color: #e8e8e8;
   border-color: #c0c0c0;
 }
 
-.close-dropdown-menu {
+.menu-dropdown-menu {
   display: none;
   position: absolute;
   top: calc(100% + 4px);
@@ -178,11 +217,11 @@ body {
   overflow: hidden;
 }
 
-.close-dropdown-menu.show {
+.menu-dropdown-menu.show {
   display: block;
 }
 
-.close-dropdown-item {
+.menu-dropdown-item {
   display: block;
   width: 100%;
   padding: 10px 16px;
@@ -196,20 +235,153 @@ body {
   border-bottom: 1px solid #f0f0f0;
 }
 
-.close-dropdown-item:last-child {
+.menu-dropdown-item:last-child {
   border-bottom: none;
 }
 
-.close-dropdown-item:hover {
+.menu-dropdown-item:hover {
   background-color: #f5f5f5;
 }
 
-.close-dropdown-item[data-action="close-all"] {
+.menu-dropdown-item[data-action="close-all"] {
   color: #d32f2f;
 }
 
-.close-dropdown-item[data-action="close-all"]:hover {
+.menu-dropdown-item[data-action="close-all"]:hover {
   background-color: #ffebee;
+}
+
+/* 設定ボタン（右下固定） */
+.settings-button {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 48px;
+  height: 48px;
+  border: none;
+  background-color: transparent;
+  color: #666;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.2s, box-shadow 0.2s;
+  z-index: 100;
+}
+
+.settings-button:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.settings-button:active {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* 設定モーダルオーバーレイ */
+.settings-modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-modal.show {
+  display: flex;
+}
+
+/* 設定ポップアップ（モーダル内のコンテンツ） */
+.settings-popup {
+  width: 500px;
+  max-width: 90vw;
+  max-height: 80vh;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.settings-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.close-settings-button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background-color: transparent;
+  color: #666;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.close-settings-button:hover {
+  background-color: #f5f5f5;
+}
+
+.settings-content {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.setting-item {
+  margin-bottom: 20px;
+}
+
+.setting-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.setting-select {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background-color: white;
+  color: #333;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.setting-select:hover {
+  border-color: #c0c0c0;
+}
+
+.setting-select:focus {
+  outline: none;
+  border-color: #4285f4;
+  box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.1);
 }
 
 .title-nav {
@@ -270,6 +442,79 @@ h1 {
   color: #333;
 }
 
+.color-picker-dropdown {
+  position: relative;
+  display: none; /* 通常Tabでは非表示 */
+}
+
+.color-picker-dropdown-button {
+  width: 32px;
+  height: 32px;
+  border: 2px solid #e0e0e0;
+  background-color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s;
+  padding: 0;
+}
+
+.color-picker-dropdown-button:hover {
+  border-color: #999;
+}
+
+.color-picker-dropdown-button.active {
+  border-color: #4285f4;
+}
+
+.color-indicator {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background-color: #4285f4;
+}
+
+.color-picker-dropdown-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  z-index: 1000;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.color-picker-dropdown-menu.show {
+  display: grid;
+}
+
+.color-button-dropdown {
+  width: 32px;
+  height: 32px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s;
+  padding: 0;
+}
+
+.color-button-dropdown:hover {
+  transform: scale(1.1);
+  border-color: #999;
+}
+
+.color-button-dropdown.active {
+  border-color: #333;
+  border-width: 3px;
+}
+
 .color-picker {
   display: flex;
   align-items: center;
@@ -305,6 +550,7 @@ h1 {
 .tab-list {
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
   gap: 8px;
   padding: 0 20px 20px 20px;
   min-height: 200px;
@@ -352,7 +598,7 @@ h1 {
 }
 
 .tab-item.drag-over-top::before {
-  content: '';
+  content: "";
   position: absolute;
   top: -6px;
   left: 0;
@@ -364,7 +610,7 @@ h1 {
 }
 
 .tab-item.drag-over-bottom::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: -6px;
   left: 0;
@@ -382,6 +628,13 @@ h1 {
 
 .tab-item:active {
   background-color: #e8f0fe;
+}
+
+/* アクティブなタブの強調表示（主にサイドパネル用） */
+.tab-item.active-tab {
+  background-color: #e8f0fe;
+  border-color: #4285f4;
+  box-shadow: 0 0 0 1px rgba(66, 133, 244, 0.2);
 }
 
 .tab-favicon {
@@ -522,4 +775,162 @@ h1 {
 
 .tab-add-new-button:active {
   background-color: #c8e6c9;
+}
+
+/* 左にIndex Tabが存在しない場合のコンテナ */
+.no-index-tab-container {
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.no-index-tab-container .empty-message {
+  margin-bottom: 24px;
+  color: #666;
+  font-size: 14px;
+}
+
+.button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 300px;
+  margin: 0 auto;
+}
+
+.create-index-tab-button {
+  padding: 12px 24px;
+  border: 1px solid #4285f4;
+  background-color: #4285f4;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background-color 0.2s, border-color 0.2s;
+  width: 100%;
+}
+
+.create-index-tab-button:hover {
+  background-color: #3367d6;
+  border-color: #3367d6;
+}
+
+.create-index-tab-button:active {
+  background-color: #2851a3;
+  border-color: #2851a3;
+}
+
+/* サイドパネルモード：画面幅が狭い場合 */
+@media (max-width: 500px) {
+  body {
+    padding: 0;
+  }
+
+  .container {
+    max-width: none;
+    border-radius: 0;
+    box-shadow: none;
+    height: 100%;
+  }
+
+  .header {
+    padding: 8px 12px 8px 20px;
+    margin-bottom: 4px;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  /* タブが多い場合、タブバーのタブ表示をアイコンのみ（タイトル非表示）にする */
+  .index-tab-bar:has(.index-tab:nth-child(3)) .index-tab {
+    min-width: 60px;
+  }
+  .index-tab-bar:has(.index-tab:nth-child(3)) .index-tab-badge {
+    margin-left: 0;
+  }
+  .index-tab-bar:has(.index-tab:nth-child(3)) .index-tab-title {
+    display: none;
+  }
+
+  .page-title-input {
+    min-width: 60px;
+    max-width: none;
+    flex: 1 1 auto;
+  }
+
+  .title-nav {
+    flex: 1 1 auto;
+    min-width: 60px;
+  }
+
+  .color-picker-dropdown,
+  .menu-dropdown {
+    flex-shrink: 0;
+  }
+
+  .color-picker {
+    display: none;
+  }
+
+  .color-picker-dropdown {
+    display: inline-block;
+  }
+
+  /* サイドパネル切替メニュー項目を非表示にする */
+  .menu-dropdown-item[data-action="toggle-sidepanel"] {
+    display: none;
+  }
+
+  .index-tab-favicon {
+    display: none;
+  }
+
+  .tab-list {
+    padding: 4px 10px 50px;
+    gap: 4px;
+  }
+
+  .tab-item {
+    padding: 8px 4px;
+  }
+
+  .drag-handle {
+    padding: 4px 0;
+    margin-right: 4px;
+  }
+
+  .tab-favicon {
+    margin-right: 8px;
+  }
+
+  /* 設定ボタン（右下固定） */
+  .settings-button {
+    background-color: white;
+  }
+
+  .settings-button:hover {
+    background-color: #eee;
+  }
+
+  .settings-button:active {
+    background-color: #ddd;
+  }
+}
+
+/* 通常タブモード：画面幅が広い場合 */
+@media (min-width: 501px) {
+  /* タブが多い場合、ファビコンを隠す */
+
+  /* タブが多い場合、タブバーのタブ表示をアイコンのみ（タイトル非表示）にする */
+  .index-tab-bar:has(.index-tab:nth-child(5)) .index-tab {
+    min-width: 0;
+  }
+  .index-tab-bar:has(.index-tab:nth-child(5)) .index-tab-badge {
+    margin-left: 0;
+  }
+  .index-tab-bar:has(.index-tab:nth-child(5)) .index-tab-favicon {
+    display: none;
+  }
+  .index-tab-bar:has(.index-tab:nth-child(5)) .index-tab-title {
+    display: none;
+  }
 }

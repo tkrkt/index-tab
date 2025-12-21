@@ -1,21 +1,110 @@
+// デフォルトの色
+const DEFAULT_COLOR = "#4285f4";
+
+// 利用可能な色のリスト
+const AVAILABLE_COLORS = [
+  "#4285f4", // 青
+  "#ea4335", // 赤
+  "#34a853", // 緑
+  "#fbbc04", // 黄
+  "#9334e6", // 紫
+  "#ff6d01", // オレンジ
+  "#46bdc6", // シアン
+  "#f439a0", // ピンク
+  "#666666", // グレー
+];
+
+// 新しいIndex Tabの色を決定する関数
+async function getNextIndexTabColor() {
+  // 設定を取得
+  const result = await chrome.storage.local.get("newIndexTabColor");
+  const colorSetting = result.newIndexTabColor || "rotate";
+
+  // 固定色が選択されている場合はそれを返す
+  if (colorSetting !== "rotate") {
+    return colorSetting;
+  }
+
+  // 順番に変える場合：最後に使用した色から次の色を決定
+  try {
+    // 最後に使用した色を取得
+    const lastColorResult = await chrome.storage.local.get(
+      "lastUsedIndexTabColor"
+    );
+    const lastColor =
+      lastColorResult.lastUsedIndexTabColor ||
+      AVAILABLE_COLORS[AVAILABLE_COLORS.length - 1];
+
+    // 次の色を決定
+    const currentIndex = AVAILABLE_COLORS.indexOf(lastColor);
+    const nextIndex = (currentIndex + 1) % AVAILABLE_COLORS.length;
+    const nextColor = AVAILABLE_COLORS[nextIndex];
+
+    // 次の色を保存
+    await chrome.storage.local.set({ lastUsedIndexTabColor: nextColor });
+
+    return nextColor;
+  } catch (error) {
+    console.error("Error getting next color:", error);
+    return DEFAULT_COLOR;
+  }
+}
+
+async function queryAllTabsForContext() {
+  // currentWindow が空になる実装があるため lastFocusedWindow にフォールバック
+  const currentWindowTabs = await chrome.tabs.query({ currentWindow: true });
+  if (currentWindowTabs && currentWindowTabs.length > 0) {
+    return currentWindowTabs;
+  }
+  return await chrome.tabs.query({ lastFocusedWindow: true });
+}
+
+async function queryActiveTabForContext() {
+  const [currentWindowActive] = await chrome.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
+  if (currentWindowActive) return currentWindowActive;
+
+  const [lastFocusedActive] = await chrome.tabs.query({
+    active: true,
+    lastFocusedWindow: true,
+  });
+  return lastFocusedActive || null;
+}
+
 // Index Tabを作成する共通関数
 async function createIndexTab() {
-  const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const currentTab = await queryActiveTabForContext();
   if (currentTab) {
-    await chrome.tabs.create({
+    const newTab = await chrome.tabs.create({
       url: chrome.runtime.getURL("tabs.html"),
       index: currentTab.index,
     });
+
+    // 新しいタブの色とタイトルを設定
+    if (newTab && newTab.id) {
+      const colorKey = `tabColor_${newTab.id}`;
+      const titleKey = `tabTitle_${newTab.id}`;
+
+      // 設定に基づいて色を決定
+      const newColor = await getNextIndexTabColor();
+
+      await chrome.storage.local.set({
+        [colorKey]: newColor,
+        [titleKey]: "Index Tab",
+      });
+    }
   }
 }
 
 // 左のIndex Tabに移動する関数
 async function goToLeftIndexTab() {
-  const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const currentTab = await queryActiveTabForContext();
   if (!currentTab) return;
 
   // 現在のウィンドウの全タブを取得
-  const allTabs = await chrome.tabs.query({ currentWindow: true });
+  const allTabs = await queryAllTabsForContext();
   const indexTabUrl = chrome.runtime.getURL("tabs.html");
 
   // 現在のタブより左にあるIndex Tabを探す
@@ -32,11 +121,11 @@ async function goToLeftIndexTab() {
 
 // 右のIndex Tabに移動する関数
 async function goToRightIndexTab() {
-  const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const currentTab = await queryActiveTabForContext();
   if (!currentTab) return;
 
   // 現在のウィンドウの全タブを取得
-  const allTabs = await chrome.tabs.query({ currentWindow: true });
+  const allTabs = await queryAllTabsForContext();
   const indexTabUrl = chrome.runtime.getURL("tabs.html");
 
   // 現在のタブより右にあるIndex Tabを探す
@@ -51,13 +140,70 @@ async function goToRightIndexTab() {
   }
 }
 
+// 設定に基づいてパネルの動作を更新
+async function updatePanelBehavior() {
+  const result = await chrome.storage.local.get('iconClickAction');
+  const action = result.iconClickAction || 'createTab';
+
+  // sidePanel API は未対応ブラウザがある（Vivaldi等）ためガード
+  if (!chrome.sidePanel || !chrome.sidePanel.setPanelBehavior) {
+    return;
+  }
+
+  try {
+    if (action === 'openSidePanel') {
+      // サイドパネルを開く動作に設定
+      await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+    } else {
+      // 通常の動作（onClickedリスナーが呼ばれる）
+      await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+    }
+  } catch (error) {
+    console.error('Failed to set panel behavior:', error);
+  }
+}
+
 // 拡張機能アイコンがクリックされたときの処理
 chrome.action.onClicked.addListener(async (tab) => {
-  // tabs.htmlを現在のタブの直前に開く
-  await chrome.tabs.create({
+  // サイドパネルを開く設定の場合はsetPanelBehaviorで処理されるため、
+  // ここではタブ作成の場合のみ実行される
+  const baseTab = tab || (await queryActiveTabForContext());
+  const index = baseTab && typeof baseTab.index === 'number' ? baseTab.index : 0;
+
+  const newTab = await chrome.tabs.create({
     url: chrome.runtime.getURL("tabs.html"),
-    index: tab.index,
+    index,
   });
+
+  // 新しいタブの色とタイトルを設定
+  if (newTab && newTab.id) {
+    const colorKey = `tabColor_${newTab.id}`;
+    const titleKey = `tabTitle_${newTab.id}`;
+
+    // 設定に基づいて色を決定
+    const newColor = await getNextIndexTabColor();
+
+    await chrome.storage.local.set({
+      [colorKey]: newColor,
+      [titleKey]: "Index Tab",
+    });
+  }
+});
+
+// ストレージの変更を監視して設定が変わったらパネルの動作を更新
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes.iconClickAction) {
+    updatePanelBehavior();
+  }
+});
+
+// 拡張機能インストール/起動時に設定を読み込んで適用
+chrome.runtime.onInstalled.addListener(() => {
+  updatePanelBehavior();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  updatePanelBehavior();
 });
 
 // ショートカットキーが押されたときの処理

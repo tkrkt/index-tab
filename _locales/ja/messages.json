@@ -110,5 +110,57 @@
   "commandGoToRightIndexTab": {
     "message": "右のIndex Tabに移動",
     "description": "右のIndex Tabに移動するコマンドの説明"
+  },
+  "toggleSidePanel": {
+    "message": "サイドパネルを開く",
+    "description": "サイドパネル開閉ボタンのツールチップ"
+  },
+  "sidePanelTitle": {
+    "message": "Index Tab - サイドパネル",
+    "description": "サイドパネルのタイトル"
+  },
+  "settingsTitle": {
+    "message": "設定",
+    "description": "設定モーダルのタイトル"
+  },
+  "settings": {
+    "message": "設定",
+    "description": "設定ボタンのツールチップ"
+  },
+  "iconClickActionLabel": {
+    "message": "拡張機能アイコンをクリックしたときの動作",
+    "description": "アイコンクリック動作設定のラベル"
+  },
+  "iconClickActionCreateTab": {
+    "message": "現在の位置にIndex Tabを開く",
+    "description": "アイコンクリック動作: タブを作成"
+  },
+  "iconClickActionOpenSidePanel": {
+    "message": "サイドパネルを開く",
+    "description": "アイコンクリック動作: サイドパネルを開く"
+  },
+  "noIndexTabMessage": {
+    "message": "左側にIndex Tabが存在しません",
+    "description": "左側にIndex Tabがない場合のメッセージ"
+  },
+  "noIndexTabBarMessage": {
+    "message": "Index Tabがありません",
+    "description": "タブバーにIndex Tabがない場合のメッセージ"
+  },
+  "createIndexTabAtStart": {
+    "message": "一番左にIndex Tabを作成",
+    "description": "一番左にIndex Tabを作成するボタン"
+  },
+  "createIndexTabAtCurrent": {
+    "message": "現在位置にIndex Tabを作成",
+    "description": "現在位置にIndex Tabを作成するボタン"
+  },
+  "newIndexTabColorLabel": {
+    "message": "新しいIndex Tabの色",
+    "description": "新しいIndex Tabの色設定のラベル"
+  },
+  "newIndexTabColorRotate": {
+    "message": "順番に変える",
+    "description": "色を順番に変える選択肢"
   }
 }

@@ -1,13 +1,17 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
   "permissions": [
     "tabs",
-    "storage"
+    "storage",
+    "sidePanel"
   ],
+  "side_panel": {
+    "default_path": "tabs.html"
+  },
   "commands": {
     "create-index-tab": {
       "description": "__MSG_commandCreateIndexTab__"
