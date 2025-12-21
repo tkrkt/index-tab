@@ -1457,6 +1457,21 @@ function displayTabs(tabs) {
       await activateTab(tab.id);
     });
 
+    // マウス中央クリック（ホイールクリック）でタブを閉じる
+    tabItem.addEventListener("auxclick", async (e) => {
+      // 中央クリックのみ
+      if (e.button !== 1) return;
+
+      // 子要素のボタン操作は優先（×/追加ボタン等）
+      const target = e.target;
+      if (target && target.closest && target.closest("button")) return;
+      if (target && target.classList && target.classList.contains("drag-handle")) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      await closeTab(tab.id);
+    });
+
     // 固定タブでない場合のみドロップを受け入れる
     if (!tab.pinned) {
       tabItem.addEventListener("dragover", (e) => {
