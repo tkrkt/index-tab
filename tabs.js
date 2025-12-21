@@ -1351,26 +1351,24 @@ function displayTabs(tabs) {
     tabItem.dataset.tabId = tab.id;
     tabItem.dataset.tabIndex = index;
     tabItem.dataset.pinned = tab.pinned; // 固定タブかどうかを記録
-    tabItem.draggable = false; // アイテム自体はドラッグ不可
-
-    // ドラッグハンドルを作成（固定タブの場合は非表示にする）
-    const dragHandle = document.createElement("div");
-    dragHandle.className = "drag-handle";
-    dragHandle.innerHTML = "⋮⋮";
-
+    // リスト要素自体のドラッグで並び替え/移動を行う（固定タブはドラッグ不可）
+    tabItem.draggable = !tab.pinned;
     if (!tab.pinned) {
-      dragHandle.draggable = true;
-      dragHandle.title = chrome.i18n.getMessage("dragToReorder");
+      tabItem.addEventListener("dragstart", (e) => {
+        // 子要素のボタン操作（×/追加）はドラッグ開始にしない
+        const target = e.target;
+        if (target && target.closest && target.closest("button")) {
+          e.preventDefault();
+          return;
+        }
 
-      // ドラッグ&ドロップイベント
-      dragHandle.addEventListener("dragstart", (e) => {
         draggedElement = tabItem;
         tabItem.classList.add("dragging");
         e.dataTransfer.effectAllowed = "move";
         e.dataTransfer.setData("text/plain", tab.id);
       });
 
-      dragHandle.addEventListener("dragend", () => {
+      tabItem.addEventListener("dragend", () => {
         tabItem.classList.remove("dragging");
         draggedElement = null;
         // すべてのドラッグオーバー表示をクリア
@@ -1378,14 +1376,9 @@ function displayTabs(tabs) {
           item.classList.remove("drag-over-top", "drag-over-bottom");
         });
       });
-    } else {
-      // 固定タブの場合は完全に非表示にする
-      dragHandle.style.visibility = "hidden";
-      dragHandle.style.pointerEvents = "none";
-      dragHandle.draggable = false;
     }
 
-    tabItem.appendChild(dragHandle); // ファビコンの作成
+    // ファビコンの作成
     if (tab.favIconUrl) {
       const favicon = document.createElement("img");
       favicon.className = "tab-favicon";
@@ -1452,8 +1445,9 @@ function displayTabs(tabs) {
 
     // クリックイベント
     tabItem.addEventListener("click", async (e) => {
-      // ドラッグハンドルのクリックは無視
-      if (e.target.classList.contains("drag-handle")) return;
+      // 子要素のボタン操作（×/追加）は別ハンドラで処理
+      const target = e.target;
+      if (target && target.closest && target.closest("button")) return;
       await activateTab(tab.id);
     });
 
@@ -1465,7 +1459,6 @@ function displayTabs(tabs) {
       // 子要素のボタン操作は優先（×/追加ボタン等）
       const target = e.target;
       if (target && target.closest && target.closest("button")) return;
-      if (target && target.classList && target.classList.contains("drag-handle")) return;
 
       e.preventDefault();
       e.stopPropagation();

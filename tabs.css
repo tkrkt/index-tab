@@ -573,24 +573,8 @@ h1 {
   position: relative;
 }
 
-.drag-handle {
-  cursor: grab;
-  color: #999;
-  font-size: 16px;
-  margin-right: 8px;
-  padding: 4px;
-  user-select: none;
-  line-height: 1;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.tab-item:hover .drag-handle {
+.tab-item:hover {
   opacity: 1;
-}
-
-.drag-handle:active {
-  cursor: grabbing;
 }
 
 .tab-item.dragging {
@@ -640,6 +624,7 @@ h1 {
 .tab-favicon {
   width: 16px;
   height: 16px;
+  margin-left: 4px;
   margin-right: 12px;
   flex-shrink: 0;
 }
@@ -661,6 +646,7 @@ h1 {
   text-overflow: ellipsis;
   white-space: nowrap;
   user-select: none;
+  line-height: 24px;
 }
 
 .empty-message {
@@ -670,14 +656,15 @@ h1 {
   font-size: 14px;
 }
 
-.tab-close-button {
+.tab-close-button,
+.tab-add-index-button,
+.tab-add-new-button {
   margin-left: 8px;
   width: 24px;
   height: 24px;
   border: 1px solid #e0e0e0;
   background-color: white;
   color: #666;
-  font-size: 20px;
   line-height: 1;
   cursor: pointer;
   border-radius: 4px;
@@ -689,8 +676,14 @@ h1 {
   justify-content: center;
 }
 
-.tab-item:hover .tab-close-button {
+.tab-item:hover .tab-close-button,
+.tab-item:hover .tab-add-index-button,
+.tab-item:hover .tab-add-new-button {
   display: flex;
+}
+
+.tab-close-button {
+  font-size: 20px;
 }
 
 .tab-close-button:hover {
@@ -704,22 +697,7 @@ h1 {
 }
 
 .tab-add-index-button {
-  margin-left: 8px;
-  width: 24px;
-  height: 24px;
-  border: 1px solid #e0e0e0;
-  background-color: white;
-  color: #666;
   font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
-  flex-shrink: 0;
-  padding: 0;
-  display: none;
-  align-items: center;
-  justify-content: center;
   font-weight: 300;
 }
 
@@ -727,10 +705,6 @@ h1 {
   display: block;
   width: 14px;
   height: 14px;
-}
-
-.tab-item:hover .tab-add-index-button {
-  display: flex;
 }
 
 .tab-add-index-button:hover {
@@ -744,27 +718,8 @@ h1 {
 }
 
 .tab-add-new-button {
-  margin-left: 8px;
-  width: 24px;
-  height: 24px;
-  border: 1px solid #e0e0e0;
-  background-color: white;
-  color: #666;
   font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
-  flex-shrink: 0;
-  padding: 0;
-  display: none;
-  align-items: center;
-  justify-content: center;
   font-weight: 300;
-}
-
-.tab-item:hover .tab-add-new-button {
-  display: flex;
 }
 
 .tab-add-new-button:hover {
@@ -885,7 +840,7 @@ h1 {
   }
 
   .tab-list {
-    padding: 4px 10px 50px;
+    padding: 4px 10px 80px;
     gap: 4px;
   }
 
@@ -893,12 +848,12 @@ h1 {
     padding: 8px 4px;
   }
 
-  .drag-handle {
-    padding: 4px 0;
-    margin-right: 4px;
+  .tab-title {
+    line-height: 24px;
   }
 
   .tab-favicon {
+    margin-left: 8px;
     margin-right: 8px;
   }
 
@@ -913,6 +868,21 @@ h1 {
 
   .settings-button:active {
     background-color: #ddd;
+  }
+
+  .tab-item.drag-over-top::before {
+    top: -4.5px;
+  }
+
+  .tab-item.drag-over-bottom::after {
+    bottom: -4.5px;
+  }
+
+  .tab-close-button,
+  .tab-add-index-button,
+  .tab-add-new-button {
+    width: 20px;
+    height: 20px;
   }
 }
 
