@@ -1398,14 +1398,14 @@ function displayTabs(tabs) {
       favicon.onerror = function () {
         // ファビコンの読み込みに失敗した場合、プレースホルダーに置き換え
         const placeholder = document.createElement("div");
-        placeholder.className = "tab-favicon-placeholder";
+        placeholder.className = "tab-favicon tab-favicon-placeholder";
         this.parentNode.replaceChild(placeholder, this);
       };
       tabItem.appendChild(favicon);
     } else {
       // ファビコンがない場合はプレースホルダー
       const placeholder = document.createElement("div");
-      placeholder.className = "tab-favicon-placeholder";
+      placeholder.className = "tab-favicon tab-favicon-placeholder";
       tabItem.appendChild(placeholder);
     }
 
