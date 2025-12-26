@@ -60,7 +60,7 @@ body {
 }
 
 .index-tab[draggable="true"] {
-  cursor: move;
+  cursor: pointer;
 }
 
 .index-tab.dragging {
@@ -617,7 +617,7 @@ h1 {
 /* アクティブなタブの強調表示（主にサイドパネル用） */
 .tab-item.active-tab {
   background-color: #e8f0fe;
-  border-color: #4285f4;
+  border-color: hsl(217, 89%, 61%);
   box-shadow: 0 0 0 1px rgba(66, 133, 244, 0.2);
 }
 
@@ -627,6 +627,7 @@ h1 {
   margin-left: 4px;
   margin-right: 12px;
   flex-shrink: 0;
+  pointer-events: none;
 }
 
 .tab-favicon-placeholder {
@@ -881,6 +882,7 @@ h1 {
   .tab-close-button,
   .tab-add-index-button,
   .tab-add-new-button {
+    margin-left: 4px;
     width: 20px;
     height: 20px;
   }
