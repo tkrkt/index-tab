@@ -1,6 +1,25 @@
 // デフォルトの色
 const DEFAULT_COLOR = "#4285f4";
 
+function generateIndexTabId() {
+  try {
+    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
+      return globalThis.crypto.randomUUID();
+    }
+  } catch {
+    // ignore
+  }
+
+  const rand = Math.random().toString(16).slice(2);
+  return `it_${Date.now().toString(16)}_${rand}`;
+}
+
+function buildIndexTabUrlWithId(indexTabId) {
+  const base = chrome.runtime.getURL("tabs.html");
+  if (!indexTabId) return base;
+  return `${base}?indexTabId=${encodeURIComponent(indexTabId)}`;
+}
+
 // 利用可能な色のリスト
 const AVAILABLE_COLORS = [
   "#4285f4", // 青
@@ -77,15 +96,17 @@ async function queryActiveTabForContext() {
 async function createIndexTab() {
   const currentTab = await queryActiveTabForContext();
   if (currentTab) {
+    const indexTabId = generateIndexTabId();
     const newTab = await chrome.tabs.create({
-      url: chrome.runtime.getURL("tabs.html"),
+      url: buildIndexTabUrlWithId(indexTabId),
       index: currentTab.index,
     });
 
     // 新しいタブの色とタイトルを設定
     if (newTab && newTab.id) {
-      const colorKey = `tabColor_${newTab.id}`;
-      const titleKey = `tabTitle_${newTab.id}`;
+      const keySuffix = indexTabId;
+      const colorKey = `tabColor_${keySuffix}`;
+      const titleKey = `tabTitle_${keySuffix}`;
 
       // 設定に基づいて色を決定
       const newColor = await getNextIndexTabColor();
@@ -109,7 +130,7 @@ async function goToLeftIndexTab() {
 
   // 現在のタブより左にあるIndex Tabを探す
   const leftIndexTabs = allTabs.filter(tab =>
-    tab.index < currentTab.index && tab.url === indexTabUrl
+    tab.index < currentTab.index && tab.url && tab.url.startsWith(indexTabUrl)
   );
 
   // 左にあるIndex Tabの中で最も右側（indexが最大）のものをアクティブにする
@@ -130,7 +151,7 @@ async function goToRightIndexTab() {
 
   // 現在のタブより右にあるIndex Tabを探す
   const rightIndexTabs = allTabs.filter(tab =>
-    tab.index > currentTab.index && tab.url === indexTabUrl
+    tab.index > currentTab.index && tab.url && tab.url.startsWith(indexTabUrl)
   );
 
   // 右にあるIndex Tabの中で最も左側（indexが最小）のものをアクティブにする
@@ -170,15 +191,18 @@ chrome.action.onClicked.addListener(async (tab) => {
   const baseTab = tab || (await queryActiveTabForContext());
   const index = baseTab && typeof baseTab.index === 'number' ? baseTab.index : 0;
 
+  const indexTabId = generateIndexTabId();
+
   const newTab = await chrome.tabs.create({
-    url: chrome.runtime.getURL("tabs.html"),
+    url: buildIndexTabUrlWithId(indexTabId),
     index,
   });
 
   // 新しいタブの色とタイトルを設定
   if (newTab && newTab.id) {
-    const colorKey = `tabColor_${newTab.id}`;
-    const titleKey = `tabTitle_${newTab.id}`;
+    const keySuffix = indexTabId;
+    const colorKey = `tabColor_${keySuffix}`;
+    const titleKey = `tabTitle_${keySuffix}`;
 
     // 設定に基づいて色を決定
     const newColor = await getNextIndexTabColor();

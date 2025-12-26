@@ -132,6 +132,47 @@ function initI18n() {
 // デフォルトの色
 const DEFAULT_COLOR = "#4285f4";
 
+function generateIndexTabId() {
+  // MV3 / modern Chrome: crypto.randomUUID() が使える
+  try {
+    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
+      return globalThis.crypto.randomUUID();
+    }
+  } catch {
+    // ignore
+  }
+
+  // fallback
+  const rand = Math.random().toString(16).slice(2);
+  return `it_${Date.now().toString(16)}_${rand}`;
+}
+
+function getIndexTabIdFromUrl(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    return u.searchParams.get("indexTabId");
+  } catch {
+    return null;
+  }
+}
+
+function buildIndexTabUrlWithId(indexTabId) {
+  const base = chrome.runtime.getURL("tabs.html");
+  if (!indexTabId) return base;
+  return `${base}?indexTabId=${encodeURIComponent(indexTabId)}`;
+}
+
+// ベストエフォートのクリーンアップ用（同一セッション内のみ）
+const indexTabKeySuffixByTabId = new Map();
+
+async function getCurrentIndexTabStorageKeySuffix() {
+  const indexTab = await getCurrentIndexTab();
+  if (!indexTab) return null;
+  const persistentId = getIndexTabIdFromUrl(indexTab.url);
+  return persistentId || (indexTab.id ? String(indexTab.id) : null);
+}
+
 // 利用可能な色のリスト
 const AVAILABLE_COLORS = [
   "#4285f4", // 青
@@ -185,8 +226,8 @@ async function getNextIndexTabColor() {
 function setFavicon(color) {
   const svg = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
     <rect x="2" y="2" width="96" height="96" rx="18" fill="${encodeURIComponent(
-      color
-    )}"/>
+    color
+  )}"/>
     <line x1="23" y1="15" x2="23" y2="85" stroke="white" stroke-width="11" stroke-linecap="round"/>
     <path d="M 38 50 L 75 50 M 75 50 L 63 36 M 75 50 L 63 64" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
   </svg>`;
@@ -214,35 +255,28 @@ function setBackgroundColor(color) {
 
 // 色を保存する関数
 async function saveColor(color) {
-  const thisTab = await getCurrentIndexTab();
-
-  if (thisTab && thisTab.id) {
-    // タブIDをキーにして色を保存
-    const key = `tabColor_${thisTab.id}`;
-    await chrome.storage.local.set({ [key]: color });
-  }
+  const suffix = await getCurrentIndexTabStorageKeySuffix();
+  if (!suffix) return;
+  const key = `tabColor_${suffix}`;
+  await chrome.storage.local.set({ [key]: color });
 }
 
 // 色を読み込む関数
 async function loadColor() {
-  const thisTab = await getCurrentIndexTab();
+  const suffix = await getCurrentIndexTabStorageKeySuffix();
+  if (!suffix) return DEFAULT_COLOR;
 
-  if (thisTab && thisTab.id) {
-    const key = `tabColor_${thisTab.id}`;
-    const result = await chrome.storage.local.get(key);
-    const color = result[key];
+  const key = `tabColor_${suffix}`;
+  const result = await chrome.storage.local.get(key);
+  const color = result[key];
 
-    console.log("color key:", key, "value:", color);
-
-    // ストレージに値がない場合はデフォルト値を保存
-    if (!color) {
-      await chrome.storage.local.set({ [key]: DEFAULT_COLOR });
-      return DEFAULT_COLOR;
-    }
-
-    return color;
+  // ストレージに値がない場合はデフォルト値を保存
+  if (!color) {
+    await chrome.storage.local.set({ [key]: DEFAULT_COLOR });
+    return DEFAULT_COLOR;
   }
-  return DEFAULT_COLOR;
+
+  return color;
 }
 
 // 色のUIを更新する共通関数
@@ -376,12 +410,10 @@ function setupColorPickerDropdown() {
 
 // タイトルを保存する関数
 async function saveTitle(title) {
-  const thisTab = await getCurrentIndexTab();
-
-  if (thisTab && thisTab.id) {
-    const key = `tabTitle_${thisTab.id}`;
-    await chrome.storage.local.set({ [key]: title });
-  }
+  const suffix = await getCurrentIndexTabStorageKeySuffix();
+  if (!suffix) return;
+  const key = `tabTitle_${suffix}`;
+  await chrome.storage.local.set({ [key]: title });
 }
 
 // タイトルのUIを更新する共通関数
@@ -406,24 +438,21 @@ function updateTitleUI(title) {
 
 // タイトルを読み込む関数
 async function loadTitle() {
-  const thisTab = await getCurrentIndexTab();
+  const suffix = await getCurrentIndexTabStorageKeySuffix();
+  const defaultTitle = chrome.i18n.getMessage("defaultTabTitle") || "Index Tab";
+  if (!suffix) return defaultTitle;
 
-  if (thisTab && thisTab.id) {
-    const key = `tabTitle_${thisTab.id}`;
-    const result = await chrome.storage.local.get(key);
-    const title = result[key];
+  const key = `tabTitle_${suffix}`;
+  const result = await chrome.storage.local.get(key);
+  const title = result[key];
 
-    // ストレージに値がない場合はデフォルト値を保存
-    if (!title) {
-      const defaultTitle =
-        chrome.i18n.getMessage("defaultTabTitle") || "Index Tab";
-      await chrome.storage.local.set({ [key]: defaultTitle });
-      return defaultTitle;
-    }
-
-    return title;
+  // ストレージに値がない場合はデフォルト値を保存
+  if (!title) {
+    await chrome.storage.local.set({ [key]: defaultTitle });
+    return defaultTitle;
   }
-  return chrome.i18n.getMessage("defaultTabTitle") || "Index Tab";
+
+  return title;
 }
 
 // ページタイトルの編集機能をセットアップ
@@ -733,11 +762,16 @@ async function updateIndexTabBar() {
     // 各タブの色とタイトルを取得して状態を作成
     const indexTabsData = [];
     for (const indexTab of indexTabs) {
-      const colorKey = `tabColor_${indexTab.id}`;
+      const indexTabId = getIndexTabIdFromUrl(indexTab.url);
+      const keySuffix = indexTabId || String(indexTab.id);
+
+      indexTabKeySuffixByTabId.set(indexTab.id, keySuffix);
+
+      const colorKey = `tabColor_${keySuffix}`;
       const colorResult = await chrome.storage.local.get(colorKey);
       const color = colorResult[colorKey] || DEFAULT_COLOR;
 
-      const titleKey = `tabTitle_${indexTab.id}`;
+      const titleKey = `tabTitle_${keySuffix}`;
       const titleResult = await chrome.storage.local.get(titleKey);
       const defaultTitle =
         chrome.i18n.getMessage("defaultTabTitle") || "Index Tab";
@@ -812,8 +846,8 @@ async function updateIndexTabBar() {
 
       const faviconSvg = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
         <rect x="2" y="2" width="96" height="96" rx="18" fill="${encodeURIComponent(
-          tabData.color
-        )}"/>
+        tabData.color
+      )}"/>
         <line x1="23" y1="15" x2="23" y2="85" stroke="white" stroke-width="11" stroke-linecap="round"/>
         <path d="M 38 50 L 75 50 M 75 50 L 63 36 M 75 50 L 63 64" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
       </svg>`;
@@ -1030,8 +1064,10 @@ function setupIndexNavigation() {
         // 現在のIndex Tabの色やタイトルが変更された場合、UIを更新
         const thisTab = await getCurrentIndexTab();
         if (thisTab && thisTab.id) {
-          const colorKey = `tabColor_${thisTab.id}`;
-          const titleKey = `tabTitle_${thisTab.id}`;
+          const persistentId = getIndexTabIdFromUrl(thisTab.url);
+          const keySuffix = persistentId || String(thisTab.id);
+          const colorKey = `tabColor_${keySuffix}`;
+          const titleKey = `tabTitle_${keySuffix}`;
 
           // 色の変更を検知
           if (changes[colorKey]) {
@@ -1247,16 +1283,18 @@ async function createNewTabAfter(tabId, tabIndex) {
 async function createIndexTabAtStart() {
   try {
     // インデックス0の位置に新しいIndex Tabページを作成
+    const indexTabId = generateIndexTabId();
     const newTab = await chrome.tabs.create({
-      url: chrome.runtime.getURL("tabs.html"),
+      url: buildIndexTabUrlWithId(indexTabId),
       index: 0,
       active: true, // アクティブにする
     });
 
     // 新しいタブのストレージをデフォルト値で初期化
     if (newTab && newTab.id) {
-      const colorKey = `tabColor_${newTab.id}`;
-      const titleKey = `tabTitle_${newTab.id}`;
+      const keySuffix = indexTabId;
+      const colorKey = `tabColor_${keySuffix}`;
+      const titleKey = `tabTitle_${keySuffix}`;
       const defaultTitle =
         chrome.i18n.getMessage("defaultTabTitle") || "Index Tab";
 
@@ -1292,16 +1330,18 @@ async function createIndexTabAtCurrentPosition() {
     if (!activeTab) return;
 
     // アクティブなタブと同じ位置に新しいIndex Tabページを作成
+    const indexTabId = generateIndexTabId();
     const newTab = await chrome.tabs.create({
-      url: chrome.runtime.getURL("tabs.html"),
+      url: buildIndexTabUrlWithId(indexTabId),
       index: activeTab.index,
       active: true, // アクティブにする
     });
 
     // 新しいタブのストレージをデフォルト値で初期化
     if (newTab && newTab.id) {
-      const colorKey = `tabColor_${newTab.id}`;
-      const titleKey = `tabTitle_${newTab.id}`;
+      const keySuffix = indexTabId;
+      const colorKey = `tabColor_${keySuffix}`;
+      const titleKey = `tabTitle_${keySuffix}`;
       const defaultTitle =
         chrome.i18n.getMessage("defaultTabTitle") || "Index Tab";
 
@@ -1414,6 +1454,7 @@ function displayTabs(tabs) {
     title.className = "tab-title";
     const noTitle = chrome.i18n.getMessage("noTitle");
     title.textContent = tab.title || noTitle;
+    title.title = tab.title || noTitle;
     tabItem.appendChild(title);
 
     // 新規タブ作成ボタンの作成
@@ -1581,11 +1622,20 @@ function setupTabListeners() {
   });
 
   // タブが削除されたとき
-  chrome.tabs.onRemoved.addListener(async (tabId) => {
+  chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
+    if (!(await shouldHandleEventForWindow(removeInfo.windowId))) return;
     // 削除されたタブのストレージデータをクリーンアップ
-    const colorKey = `tabColor_${tabId}`;
-    const titleKey = `tabTitle_${tabId}`;
-    await chrome.storage.local.remove([colorKey, titleKey]);
+    const legacyColorKey = `tabColor_${tabId}`;
+    const legacyTitleKey = `tabTitle_${tabId}`;
+    const keysToRemove = [legacyColorKey, legacyTitleKey];
+
+    const keySuffix = indexTabKeySuffixByTabId.get(tabId);
+    if (keySuffix && keySuffix !== String(tabId)) {
+      keysToRemove.push(`tabColor_${keySuffix}`, `tabTitle_${keySuffix}`);
+    }
+    indexTabKeySuffixByTabId.delete(tabId);
+
+    await chrome.storage.local.remove(keysToRemove);
 
     scheduleUpdateTabList();
   });
@@ -1667,16 +1717,18 @@ async function addIndexTabAtPosition(targetTabIndex) {
     const insertIndex = targetTabIndex;
 
     // 新しいIndex Tabページを作成
+    const indexTabId = generateIndexTabId();
     const newTab = await chrome.tabs.create({
-      url: chrome.runtime.getURL("tabs.html"),
+      url: buildIndexTabUrlWithId(indexTabId),
       index: insertIndex,
       active: false, // 一旦非アクティブで作成
     });
 
     // 新しいタブのストレージをクリア（古いデータが残らないようにする）
     if (newTab && newTab.id) {
-      const colorKey = `tabColor_${newTab.id}`;
-      const titleKey = `tabTitle_${newTab.id}`;
+      const keySuffix = indexTabId;
+      const colorKey = `tabColor_${keySuffix}`;
+      const titleKey = `tabTitle_${keySuffix}`;
       const defaultTitle =
         chrome.i18n.getMessage("defaultTabTitle") || "Index Tab";
 
