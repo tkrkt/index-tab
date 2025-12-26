@@ -1,11 +1,85 @@
 // 現在のタブを取得する関数（サイドパネル対応）
 // サイドパネル: 現在アクティブなタブ
 // Index Tabページ: 自分自身
+
+let cachedIsSidePanelContext = null;
+let boundWindowIdForSidePanel = null;
+
+async function getIsSidePanelContextCached() {
+  if (cachedIsSidePanelContext !== null) return cachedIsSidePanelContext;
+  cachedIsSidePanelContext = await isSidePanelContext();
+  return cachedIsSidePanelContext;
+}
+
+async function queryActiveTabForContextUnbound() {
+  // サイドパネルでは currentWindow が空になる可能性があるためフォールバック
+  const [currentWindowActive] = await chrome.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
+  if (currentWindowActive) return currentWindowActive;
+
+  const [lastFocusedActive] = await chrome.tabs.query({
+    active: true,
+    lastFocusedWindow: true,
+  });
+  return lastFocusedActive || null;
+}
+
+async function ensureBoundWindowIdForSidePanel() {
+  if (typeof boundWindowIdForSidePanel === "number") return boundWindowIdForSidePanel;
+
+  // まずはこの実行コンテキスト（サイドパネル/タブ）が属するウィンドウIDを取得
+  try {
+    const win = await chrome.windows.getCurrent();
+    if (
+      win &&
+      typeof win.id === "number" &&
+      win.id !== chrome.windows.WINDOW_ID_NONE
+    ) {
+      boundWindowIdForSidePanel = win.id;
+      return boundWindowIdForSidePanel;
+    }
+  } catch {
+    // ignore
+  }
+
+  // 一部ブラウザで getCurrent が期待通り動かない場合のフォールバック
+  try {
+    const activeTab = await queryActiveTabForContextUnbound();
+    if (activeTab && typeof activeTab.windowId === "number") {
+      boundWindowIdForSidePanel = activeTab.windowId;
+      return boundWindowIdForSidePanel;
+    }
+  } catch {
+    // ignore
+  }
+
+  return null;
+}
+
+async function shouldHandleEventForWindow(eventWindowId) {
+  if (!(await getIsSidePanelContextCached())) return true;
+  const boundWindowId = await ensureBoundWindowIdForSidePanel();
+  if (typeof boundWindowId !== "number") return true;
+  return eventWindowId === boundWindowId;
+}
+
 async function queryAllTabsForContext() {
   // Index Tabページ（通常タブ）では currentWindow が期待通り動く
   const currentTab = await chrome.tabs.getCurrent();
   if (currentTab) {
     return await chrome.tabs.query({ currentWindow: true });
+  }
+
+  // サイドパネルでは lastFocusedWindow が別ウィンドウ操作で変わるため、
+  // サイドパネル起動時の windowId に固定して取得する。
+  const boundWindowId = await ensureBoundWindowIdForSidePanel();
+  if (typeof boundWindowId === "number") {
+    const tabsInBoundWindow = await chrome.tabs.query({ windowId: boundWindowId });
+    if (tabsInBoundWindow && tabsInBoundWindow.length > 0) {
+      return tabsInBoundWindow;
+    }
   }
 
   // サイドパネルではブラウザ実装によって currentWindow が空になることがあるため、
@@ -23,6 +97,15 @@ async function queryActiveTabForContext() {
   if (currentTab) {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     return tab || null;
+  }
+
+  const boundWindowId = await ensureBoundWindowIdForSidePanel();
+  if (typeof boundWindowId === "number") {
+    const [tabInBoundWindow] = await chrome.tabs.query({
+      active: true,
+      windowId: boundWindowId,
+    });
+    if (tabInBoundWindow) return tabInBoundWindow;
   }
 
   // サイドパネル: currentWindow が空になる可能性があるためフォールバック
@@ -1046,14 +1129,35 @@ function setupIndexNavigation() {
   if (!indexNavigationInitialized) {
     indexNavigationInitialized = true;
 
-    // タブの変更時に更新
-    chrome.tabs.onActivated.addListener(() => scheduleUpdateIndexTabBar());
-    chrome.tabs.onCreated.addListener(() => scheduleUpdateIndexTabBar());
-    chrome.tabs.onRemoved.addListener(() => scheduleUpdateIndexTabBar());
-    chrome.tabs.onMoved.addListener(() => scheduleUpdateIndexTabBar());
-    chrome.tabs.onUpdated.addListener(() => scheduleUpdateIndexTabBar());
-    chrome.tabs.onAttached.addListener(() => scheduleUpdateIndexTabBar());
-    chrome.tabs.onDetached.addListener(() => scheduleUpdateIndexTabBar());
+    // タブの変更時に更新（サイドパネルでは自ウィンドウの変更のみ）
+    chrome.tabs.onActivated.addListener(async (activeInfo) => {
+      if (!(await shouldHandleEventForWindow(activeInfo.windowId))) return;
+      scheduleUpdateIndexTabBar();
+    });
+    chrome.tabs.onCreated.addListener(async (tab) => {
+      if (!(await shouldHandleEventForWindow(tab.windowId))) return;
+      scheduleUpdateIndexTabBar();
+    });
+    chrome.tabs.onRemoved.addListener(async (_tabId, removeInfo) => {
+      if (!(await shouldHandleEventForWindow(removeInfo.windowId))) return;
+      scheduleUpdateIndexTabBar();
+    });
+    chrome.tabs.onMoved.addListener(async (_tabId, moveInfo) => {
+      if (!(await shouldHandleEventForWindow(moveInfo.windowId))) return;
+      scheduleUpdateIndexTabBar();
+    });
+    chrome.tabs.onUpdated.addListener(async (_tabId, _changeInfo, tab) => {
+      if (!(await shouldHandleEventForWindow(tab.windowId))) return;
+      scheduleUpdateIndexTabBar();
+    });
+    chrome.tabs.onAttached.addListener(async (_tabId, attachInfo) => {
+      if (!(await shouldHandleEventForWindow(attachInfo.newWindowId))) return;
+      scheduleUpdateIndexTabBar();
+    });
+    chrome.tabs.onDetached.addListener(async (_tabId, detachInfo) => {
+      if (!(await shouldHandleEventForWindow(detachInfo.oldWindowId))) return;
+      scheduleUpdateIndexTabBar();
+    });
 
     // ストレージの変更時にも更新（色やタイトルが変更された時）
     chrome.storage.onChanged.addListener(async (changes, areaName) => {
@@ -1617,7 +1721,8 @@ let lastIndexTabId = null; // サイドパネル用：前回のIndex Tab IDを�
 
 function setupTabListeners() {
   // タブが作成されたとき
-  chrome.tabs.onCreated.addListener(() => {
+  chrome.tabs.onCreated.addListener(async (tab) => {
+    if (!(await shouldHandleEventForWindow(tab.windowId))) return;
     scheduleUpdateTabList();
   });
 
@@ -1641,31 +1746,43 @@ function setupTabListeners() {
   });
 
   // タブが更新されたとき（タイトルやファビコンの変更）
-  chrome.tabs.onUpdated.addListener(() => {
+  chrome.tabs.onUpdated.addListener(async (_tabId, _changeInfo, tab) => {
+    if (!(await shouldHandleEventForWindow(tab.windowId))) return;
     scheduleUpdateTabList();
   });
 
   // タブが移動されたとき
-  chrome.tabs.onMoved.addListener(() => {
+  chrome.tabs.onMoved.addListener(async (_tabId, moveInfo) => {
+    if (!(await shouldHandleEventForWindow(moveInfo.windowId))) return;
     scheduleUpdateTabList();
   });
 
   // タブがアタッチ/デタッチされたとき（ウィンドウ間の移動）
-  chrome.tabs.onAttached.addListener(() => {
+  chrome.tabs.onAttached.addListener(async (_tabId, attachInfo) => {
+    if (!(await shouldHandleEventForWindow(attachInfo.newWindowId))) return;
     scheduleUpdateTabList();
   });
 
-  chrome.tabs.onDetached.addListener(() => {
+  chrome.tabs.onDetached.addListener(async (_tabId, detachInfo) => {
+    if (!(await shouldHandleEventForWindow(detachInfo.oldWindowId))) return;
     scheduleUpdateTabList();
   });
 
   // タブが置き換えられたとき
-  chrome.tabs.onReplaced.addListener(() => {
+  chrome.tabs.onReplaced.addListener(async (addedTabId) => {
+    // replaced は windowId を直接持たないため、追加側のタブから判定
+    try {
+      const addedTab = await chrome.tabs.get(addedTabId);
+      if (!(await shouldHandleEventForWindow(addedTab.windowId))) return;
+    } catch {
+      // タブ情報が取れない場合は従来挙動
+    }
     scheduleUpdateTabList();
   });
 
   // タブがアクティブになったとき
-  chrome.tabs.onActivated.addListener(async () => {
+  chrome.tabs.onActivated.addListener(async (activeInfo) => {
+    if (!(await shouldHandleEventForWindow(activeInfo.windowId))) return;
     // サイドパネルかどうかを判定（getCurrent()がnullならサイドパネル）
     if (await isSidePanelContext()) {
       // サイドパネルの場合は、getCurrentIndexTab()が変わったかチェック
@@ -1758,6 +1875,12 @@ async function addIndexTabAtPosition(targetTabIndex) {
 
 // ページ読み込み時の処理
 document.addEventListener("DOMContentLoaded", async () => {
+  // サイドパネルの場合は windowId を固定しておく（他ウィンドウ操作で lastFocused が変わっても影響しない）
+  await getIsSidePanelContextCached();
+  if (cachedIsSidePanelContext) {
+    await ensureBoundWindowIdForSidePanel();
+  }
+
   // i18n初期化
   initI18n();
 
