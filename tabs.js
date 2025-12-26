@@ -971,6 +971,19 @@ async function updateIndexTabBar() {
 
         e.preventDefault();
         e.stopPropagation();
+
+        // 現在表示中（アクティブ）のIndex Tabを閉じる場合は、左側のIndex Tabがあればそれをアクティブにする。
+        // 左にIndex Tabがなければ何もしない。
+        if (tabElement.classList.contains("active")) {
+          try {
+            const closingTab = await chrome.tabs.get(targetTabId);
+            if (closingTab) {
+              await activateLeftIndexTab(closingTab);
+            }
+          } catch (error) {
+            console.error("左側Index Tabのアクティブ化に失敗しました:", error);
+          }
+        }
         await closeTab(targetTabId);
       });
 
