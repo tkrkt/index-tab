@@ -796,14 +796,23 @@ h1 {
     gap: 8px;
   }
 
+  .index-tab {
+    min-width: 110px;
+    padding: 8px 12px;
+  }
+
+  .index-tab-badge {
+    padding: 0 4px;
+  }
+
   /* タブが多い場合、タブバーのタブ表示をアイコンのみ（タイトル非表示）にする */
-  .index-tab-bar:has(.index-tab:nth-child(3)) .index-tab {
+  .index-tab-bar:has(.index-tab:nth-child(4)) .index-tab {
     min-width: 60px;
   }
-  .index-tab-bar:has(.index-tab:nth-child(3)) .index-tab-badge {
+  .index-tab-bar:has(.index-tab:nth-child(4)) .index-tab-badge {
     margin-left: 0;
   }
-  .index-tab-bar:has(.index-tab:nth-child(3)) .index-tab-title {
+  .index-tab-bar:has(.index-tab:nth-child(4)) .index-tab-title {
     display: none;
   }
 
@@ -890,8 +899,6 @@ h1 {
 
 /* 通常タブモード：画面幅が広い場合 */
 @media (min-width: 501px) {
-  /* タブが多い場合、ファビコンを隠す */
-
   /* タブが多い場合、タブバーのタブ表示をアイコンのみ（タイトル非表示）にする */
   .index-tab-bar:has(.index-tab:nth-child(5)) .index-tab {
     min-width: 0;
