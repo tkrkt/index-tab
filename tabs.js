@@ -1120,12 +1120,95 @@ async function updateIndexTabBar() {
 }
 
 let scheduledIndexTabBarUpdateTimer = null;
+
+// クリック/ドラッグ中の再描画は、mousedown〜mouseup 間にDOMが差し替わって
+// click が失われたり、D&Dが破綻する原因になるため、ユーザー操作中は延期する。
+let activePointerCount = 0;
+let activeDragCount = 0;
+let deferredTabListUpdate = false;
+let deferredIndexTabBarUpdate = false;
+let deferredFlushTimer = null;
+
+function isUserInteracting() {
+  return activePointerCount > 0 || activeDragCount > 0;
+}
+
+function requestFlushDeferredRenders() {
+  if (deferredFlushTimer) return;
+  deferredFlushTimer = setTimeout(() => {
+    deferredFlushTimer = null;
+    if (isUserInteracting()) return;
+
+    const shouldUpdateTabList = deferredTabListUpdate;
+    const shouldUpdateIndexTabBar = deferredIndexTabBarUpdate;
+    deferredTabListUpdate = false;
+    deferredIndexTabBarUpdate = false;
+
+    if (shouldUpdateIndexTabBar) scheduleUpdateIndexTabBar(0);
+    if (shouldUpdateTabList) scheduleUpdateTabList(0);
+  }, 0);
+}
+
+function setupUserInteractionGuards() {
+  // capture で拾う: DOM差し替えの影響を受けにくい
+  window.addEventListener(
+    "pointerdown",
+    () => {
+      activePointerCount++;
+    },
+    true
+  );
+
+  const endPointer = () => {
+    activePointerCount = Math.max(0, activePointerCount - 1);
+    if (!isUserInteracting()) requestFlushDeferredRenders();
+  };
+
+  window.addEventListener("pointerup", endPointer, true);
+  window.addEventListener("pointercancel", endPointer, true);
+
+  // フォーカス喪失時にリセット（ドラッグ中に外へ出た等の取りこぼし対策）
+  window.addEventListener(
+    "blur",
+    () => {
+      activePointerCount = 0;
+      activeDragCount = 0;
+      requestFlushDeferredRenders();
+    },
+    true
+  );
+
+  window.addEventListener(
+    "dragstart",
+    () => {
+      activeDragCount++;
+    },
+    true
+  );
+
+  const endDrag = () => {
+    activeDragCount = Math.max(0, activeDragCount - 1);
+    if (!isUserInteracting()) requestFlushDeferredRenders();
+  };
+
+  window.addEventListener("dragend", endDrag, true);
+  window.addEventListener("drop", endDrag, true);
+}
+
 function scheduleUpdateIndexTabBar(delayMs = 50) {
   if (scheduledIndexTabBarUpdateTimer) {
     clearTimeout(scheduledIndexTabBarUpdateTimer);
   }
   scheduledIndexTabBarUpdateTimer = setTimeout(() => {
     scheduledIndexTabBarUpdateTimer = null;
+
+    // 実行時点で操作中なら、終了後にまとめて再実行する
+    if (isUserInteracting()) {
+      deferredIndexTabBarUpdate = true;
+      requestFlushDeferredRenders();
+      return;
+    }
+
     updateIndexTabBar().catch((error) => {
       console.error("タブバーの更新に失敗しました:", error);
     });
@@ -1821,6 +1904,14 @@ function scheduleUpdateTabList(delayMs = 50) {
   }
   scheduledTabListUpdateTimer = setTimeout(() => {
     scheduledTabListUpdateTimer = null;
+
+    // 実行時点で操作中なら、終了後にまとめて再実行する
+    if (isUserInteracting()) {
+      deferredTabListUpdate = true;
+      requestFlushDeferredRenders();
+      return;
+    }
+
     updateTabList().catch((error) => {
       console.error("タブの更新に失敗しました:", error);
     });
@@ -2012,6 +2103,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ナビゲーション機能のセットアップ
   setupIndexNavigation();
+
+  // クリック/ドラッグ中の再描画を延期するガード
+  setupUserInteractionGuards();
 
   // 初期表示
   await updateTabList();
