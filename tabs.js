@@ -956,6 +956,7 @@ async function updateIndexTabBar() {
 
       // クリックでそのIndex Tabに切り替え
       const targetTabId = tabData.id;
+      const targetTabIndex = tabData.index;
       tabElement.addEventListener("click", async (e) => {
         // ドラッグ中は無視
         if (tabElement.classList.contains("drag-over")) return;
@@ -1131,12 +1132,80 @@ function scheduleUpdateIndexTabBar(delayMs = 50) {
   }, delayMs);
 }
 
+let indexTabBarDropInitialized = false;
+
+function setupIndexTabBarDropTarget() {
+  if (indexTabBarDropInitialized) return;
+  const tabBar = document.getElementById("indexTabBar");
+  if (!tabBar) return;
+
+  indexTabBarDropInitialized = true;
+
+  tabBar.addEventListener("dragover", (e) => {
+    // 個別のIndex Tab要素に対するdragoverは既存ハンドラが担当
+    const target = e.target;
+    if (target && target.closest && target.closest(".index-tab")) return;
+
+    const draggingIndexTab = document.querySelector(".index-tab.dragging");
+    if (draggingIndexTab) return;
+
+    const hasPlain = e.dataTransfer && e.dataTransfer.types
+      ? e.dataTransfer.types.includes("text/plain")
+      : false;
+    if (!hasPlain) return;
+
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  });
+
+  tabBar.addEventListener("drop", async (e) => {
+    // 個別のIndex Tab要素に対するdropは既存ハンドラが担当
+    const target = e.target;
+    if (target && target.closest && target.closest(".index-tab")) return;
+
+    const draggingIndexTab = document.querySelector(".index-tab.dragging");
+    if (draggingIndexTab) return;
+
+    e.preventDefault();
+
+    const draggedData = e.dataTransfer ? e.dataTransfer.getData("text/plain") : "";
+    if (!draggedData || draggedData.startsWith("indextab-")) return;
+
+    const draggedTabId = parseInt(draggedData, 10);
+    if (!draggedTabId) return;
+
+    // タブバー上の空き領域にドロップされた場合は、アクティブなIndex Tab配下へ入れる
+    let targetIndexTabId = null;
+    const activeIndexTabEl = document.querySelector(".index-tab.active");
+    if (activeIndexTabEl && activeIndexTabEl.dataset && activeIndexTabEl.dataset.tabId) {
+      const parsed = parseInt(activeIndexTabEl.dataset.tabId, 10);
+      if (parsed) targetIndexTabId = parsed;
+    }
+
+    if (!targetIndexTabId) {
+      const currentIndexTab = await getCurrentIndexTab();
+      if (currentIndexTab && currentIndexTab.id) targetIndexTabId = currentIndexTab.id;
+    }
+
+    if (!targetIndexTabId) return;
+
+    try {
+      await moveTabToIndexTabGroupEnd(draggedTabId, targetIndexTabId);
+    } catch (error) {
+      console.error("タブの移動に失敗しました:", error);
+    }
+  });
+}
+
 // Index Tabページ間のナビゲーション機能をセットアップ
 let indexNavigationInitialized = false;
 
 function setupIndexNavigation() {
   // 初期表示
   updateIndexTabBar();
+
+  // タブバー空き領域へのdrop対応
+  setupIndexTabBarDropTarget();
 
   // リスナーは一度だけ登録
   if (!indexNavigationInitialized) {
@@ -1287,6 +1356,35 @@ async function moveIndexTabGroup(
     console.error("Index Tabグループの移動に失敗しました:", error);
   }
 } // 右側のタブを取得する関数
+
+async function moveTabToIndexTabGroupEnd(draggedTabId, targetIndexTabId) {
+  const allTabs = await queryAllTabsForContext();
+  const indexTabUrlPrefix = chrome.runtime.getURL("tabs.html");
+
+  const draggedTab = allTabs.find((t) => t.id === draggedTabId);
+  const targetIndexTab = allTabs.find((t) => t.id === targetIndexTabId);
+  if (!draggedTab || !targetIndexTab) return;
+
+  // このIndex Tabの配下の末尾に移動（既存ロジックと同等の計算）
+  let newIndex = targetIndexTab.index + 1;
+  for (let i = targetIndexTab.index + 1; i < allTabs.length; i++) {
+    const tab = allTabs[i];
+    if (tab.url && tab.url.startsWith(indexTabUrlPrefix)) {
+      if (draggedTab.index < tab.index) {
+        newIndex = tab.index - 1;
+      } else {
+        newIndex = tab.index;
+      }
+      break;
+    }
+    newIndex = tab.index + 1;
+  }
+
+  if (newIndex >= allTabs.length) newIndex = allTabs.length - 1;
+
+  await chrome.tabs.move(draggedTabId, { index: newIndex });
+}
+
 async function getRightTabs() {
   try {
     // このIndex Tab自身の情報を取得
