@@ -1128,6 +1128,8 @@ let activeDragCount = 0;
 let deferredTabListUpdate = false;
 let deferredIndexTabBarUpdate = false;
 let deferredFlushTimer = null;
+let pendingTabListUpdateResolvers = [];
+let pendingIndexTabBarUpdateResolvers = [];
 
 function isUserInteracting() {
   return activePointerCount > 0 || activeDragCount > 0;
@@ -1147,6 +1149,67 @@ function requestFlushDeferredRenders() {
     if (shouldUpdateIndexTabBar) scheduleUpdateIndexTabBar(0);
     if (shouldUpdateTabList) scheduleUpdateTabList(0);
   }, 0);
+}
+
+function settlePendingTabListUpdates() {
+  if (pendingTabListUpdateResolvers.length === 0) return;
+  const resolvers = pendingTabListUpdateResolvers;
+  pendingTabListUpdateResolvers = [];
+  for (const resolve of resolvers) {
+    try {
+      resolve();
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function settlePendingIndexTabBarUpdates() {
+  if (pendingIndexTabBarUpdateResolvers.length === 0) return;
+  const resolvers = pendingIndexTabBarUpdateResolvers;
+  pendingIndexTabBarUpdateResolvers = [];
+  for (const resolve of resolvers) {
+    try {
+      resolve();
+    } catch {
+      // ignore
+    }
+  }
+}
+
+// 直呼び/await 用: 操作中なら延期し、更新が実行されたタイミングで resolve する
+function requestUpdateTabListNow() {
+  if (isUserInteracting()) {
+    deferredTabListUpdate = true;
+    requestFlushDeferredRenders();
+    return new Promise((resolve) => pendingTabListUpdateResolvers.push(resolve));
+  }
+
+  return updateTabList()
+    .catch((error) => {
+      console.error("タブの更新に失敗しました:", error);
+    })
+    .finally(() => {
+      settlePendingTabListUpdates();
+    });
+}
+
+function requestUpdateIndexTabBarNow() {
+  if (isUserInteracting()) {
+    deferredIndexTabBarUpdate = true;
+    requestFlushDeferredRenders();
+    return new Promise((resolve) =>
+      pendingIndexTabBarUpdateResolvers.push(resolve)
+    );
+  }
+
+  return updateIndexTabBar()
+    .catch((error) => {
+      console.error("タブバーの更新に失敗しました:", error);
+    })
+    .finally(() => {
+      settlePendingIndexTabBarUpdates();
+    });
 }
 
 function setupUserInteractionGuards() {
@@ -1199,6 +1262,14 @@ function scheduleUpdateIndexTabBar(delayMs = 50) {
   if (scheduledIndexTabBarUpdateTimer) {
     clearTimeout(scheduledIndexTabBarUpdateTimer);
   }
+
+  // 操作中なら呼び出し時点で一律延期する
+  if (isUserInteracting()) {
+    deferredIndexTabBarUpdate = true;
+    requestFlushDeferredRenders();
+    return;
+  }
+
   scheduledIndexTabBarUpdateTimer = setTimeout(() => {
     scheduledIndexTabBarUpdateTimer = null;
 
@@ -1209,9 +1280,13 @@ function scheduleUpdateIndexTabBar(delayMs = 50) {
       return;
     }
 
-    updateIndexTabBar().catch((error) => {
-      console.error("タブバーの更新に失敗しました:", error);
-    });
+    updateIndexTabBar()
+      .catch((error) => {
+        console.error("タブバーの更新に失敗しました:", error);
+      })
+      .finally(() => {
+        settlePendingIndexTabBarUpdates();
+      });
   }, delayMs);
 }
 
@@ -1285,7 +1360,7 @@ let indexNavigationInitialized = false;
 
 function setupIndexNavigation() {
   // 初期表示
-  updateIndexTabBar();
+  requestUpdateIndexTabBarNow();
 
   // タブバー空き領域へのdrop対応
   setupIndexTabBarDropTarget();
@@ -1434,7 +1509,7 @@ async function moveIndexTabGroup(
 
     // キャッシュをクリアして強制的に更新
     lastIndexTabsState = null;
-    await updateIndexTabBar();
+    await requestUpdateIndexTabBarNow();
   } catch (error) {
     console.error("Index Tabグループの移動に失敗しました:", error);
   }
@@ -1610,7 +1685,7 @@ async function createIndexTabAtStart() {
 
     // キャッシュをクリアして強制的に更新
     lastIndexTabsState = null;
-    await updateIndexTabBar();
+    await requestUpdateIndexTabBarNow();
   } catch (error) {
     console.error("Index Tabの作成に失敗しました:", error);
   }
@@ -1657,7 +1732,7 @@ async function createIndexTabAtCurrentPosition() {
 
     // キャッシュをクリアして強制的に更新
     lastIndexTabsState = null;
-    await updateIndexTabBar();
+    await requestUpdateIndexTabBarNow();
   } catch (error) {
     console.error("Index Tabの作成に失敗しました:", error);
   }
@@ -1902,6 +1977,14 @@ function scheduleUpdateTabList(delayMs = 50) {
   if (scheduledTabListUpdateTimer) {
     clearTimeout(scheduledTabListUpdateTimer);
   }
+
+  // 操作中なら呼び出し時点で一律延期する
+  if (isUserInteracting()) {
+    deferredTabListUpdate = true;
+    requestFlushDeferredRenders();
+    return;
+  }
+
   scheduledTabListUpdateTimer = setTimeout(() => {
     scheduledTabListUpdateTimer = null;
 
@@ -1912,9 +1995,13 @@ function scheduleUpdateTabList(delayMs = 50) {
       return;
     }
 
-    updateTabList().catch((error) => {
-      console.error("タブの更新に失敗しました:", error);
-    });
+    updateTabList()
+      .catch((error) => {
+        console.error("タブの更新に失敗しました:", error);
+      })
+      .finally(() => {
+        settlePendingTabListUpdates();
+      });
   }, delayMs);
 }
 
@@ -2004,7 +2091,7 @@ function setupTabListeners() {
         scheduleUpdateIndexTabBar();
       }
       // アクティブタブのハイライト表示のため、常にタブリストは更新
-      await updateTabList();
+      await requestUpdateTabListNow();
     } else {
       // Index Tabページの場合
       scheduleUpdateTabList(0);
@@ -2069,7 +2156,7 @@ async function addIndexTabAtPosition(targetTabIndex) {
 
     // キャッシュをクリアして強制的に更新
     lastIndexTabsState = null;
-    await updateIndexTabBar();
+    await requestUpdateIndexTabBarNow();
   } catch (error) {
     console.error("Index Tabの追加に失敗しました:", error);
   }
@@ -2108,7 +2195,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupUserInteractionGuards();
 
   // 初期表示
-  await updateTabList();
+  await requestUpdateTabListNow();
 
   // タブの変更を監視開始
   setupTabListeners();
