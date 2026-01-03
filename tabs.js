@@ -1652,6 +1652,51 @@ async function createNewTabAfter(tabId, tabIndex) {
   }
 }
 
+// 現在のIndex Tab配下の末尾に新規タブを作成する関数
+async function createNewTabAtEndOfCurrentIndexGroup() {
+  try {
+    const rightTabs = await getRightTabs();
+
+    // 配下タブがある場合は最後のタブの直後へ、なければIndex Tab自身の直後へ
+    const anchorTab =
+      rightTabs && rightTabs.length > 0
+        ? rightTabs[rightTabs.length - 1]
+        : await getCurrentIndexTab();
+
+    if (!anchorTab || !anchorTab.id) return;
+    await createNewTabAfter(anchorTab.id, anchorTab.index);
+  } catch (error) {
+    console.error("末尾への新規タブ作成に失敗しました:", error);
+  }
+}
+
+function setupAddNewTabOnTabListBlankDblClick() {
+  const tabListElement = document.getElementById("tabList");
+  if (!tabListElement) return;
+
+  tabListElement.addEventListener("dblclick", async (e) => {
+    // クリック/ドラッグ中のDOM差し替え回避と整合
+    if (isUserInteracting()) return;
+
+    // 「余白部分」判定: tabList自身がターゲットであること（要素上のdblclickは除外）
+    if (e.target !== tabListElement) return;
+
+    // 「下の余白」判定: tab-item がある場合は最終要素の下側のみを対象にする
+    const tabItems = tabListElement.querySelectorAll(".tab-item");
+    if (tabItems && tabItems.length > 0) {
+      const lastItem = tabItems[tabItems.length - 1];
+      const lastRect = lastItem.getBoundingClientRect();
+      if (typeof e.clientY === "number" && e.clientY < lastRect.bottom) {
+        return;
+      }
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    await createNewTabAtEndOfCurrentIndexGroup();
+  });
+}
+
 // 一番左にIndex Tabを作成する関数
 async function createIndexTabAtStart() {
   try {
@@ -2178,6 +2223,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // カラーピッカードロップダウンのセットアップ（サイドパネル用）
   setupColorPickerDropdown();
+
+  // tabListの下側余白ダブルクリックで末尾に新規タブを追加
+  setupAddNewTabOnTabListBlankDblClick();
 
   // タイトル編集機能のセットアップ
   setupTitleEditor();
