@@ -67,6 +67,10 @@
     "message": "Close this Index Tab and all child tabs",
     "description": "Close all tabs menu item"
   },
+  "reloadAllChildTabs": {
+    "message": "Reload all child tabs",
+    "description": "Reload all child tabs menu item"
+  },
   "loadingMessage": {
     "message": "Loading tabs...",
     "description": "Loading message"

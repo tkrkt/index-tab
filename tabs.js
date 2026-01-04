@@ -646,6 +646,9 @@ function setupMenuDropdown() {
       } else if (action === "close-tab") {
         // このIndex Tabのみを閉じる
         await closeCurrentIndexTab();
+      } else if (action === "reload-children") {
+        // 配下のタブをすべて再読み込み
+        await reloadCurrentIndexTabChildren();
       } else if (action === "close-all") {
         // 確認ダイアログを表示
         const confirmMessage = chrome.i18n.getMessage("confirmCloseAll");
@@ -664,6 +667,39 @@ function setupMenuDropdown() {
       dropdownButton.classList.remove("active");
     }
   });
+}
+
+// 現在のIndex Tabの配下タブ（右側〜次のIndex Tab手前）をすべて再読み込み
+async function reloadCurrentIndexTabChildren() {
+  try {
+    const thisTab = await getCurrentIndexTab();
+    if (!thisTab || !thisTab.id) return;
+
+    const allTabs = await queryAllTabsForContext();
+    const tabIdsToReload = [];
+
+    for (let i = thisTab.index + 1; i < allTabs.length; i++) {
+      const tab = allTabs[i];
+      if (tab.url && tab.url.startsWith(chrome.runtime.getURL("tabs.html"))) {
+        break;
+      }
+      if (tab && typeof tab.id === "number") {
+        tabIdsToReload.push(tab.id);
+      }
+    }
+
+    await Promise.allSettled(
+      tabIdsToReload.map(async (tabId) => {
+        try {
+          await chrome.tabs.reload(tabId);
+        } catch {
+          // ignore individual reload failures
+        }
+      })
+    );
+  } catch (error) {
+    console.error("タブの再読み込みに失敗しました:", error);
+  }
 }
 
 // 設定モーダルのセットアップ
