@@ -71,6 +71,10 @@
     "message": "Reload all child tabs",
     "description": "Reload all child tabs menu item"
   },
+  "discardAllChildTabs": {
+    "message": "Discard all child tabs",
+    "description": "Discard all child tabs menu item"
+  },
   "loadingMessage": {
     "message": "Loading tabs...",
     "description": "Loading message"

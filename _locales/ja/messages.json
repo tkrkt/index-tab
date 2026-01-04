@@ -71,6 +71,10 @@
     "message": "配下のタブをすべて再読み込み",
     "description": "配下のタブをすべて再読み込みするメニュー項目"
   },
+  "discardAllChildTabs": {
+    "message": "配下のタブをすべて休止",
+    "description": "配下のタブをすべて休止するメニュー項目"
+  },
   "loadingMessage": {
     "message": "タブを読み込み中...",
     "description": "読み込み中メッセージ"

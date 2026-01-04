@@ -649,6 +649,9 @@ function setupMenuDropdown() {
       } else if (action === "reload-children") {
         // 配下のタブをすべて再読み込み
         await reloadCurrentIndexTabChildren();
+      } else if (action === "discard-children") {
+        // 配下のタブをすべて休止
+        await discardCurrentIndexTabChildren();
       } else if (action === "close-all") {
         // 確認ダイアログを表示
         const confirmMessage = chrome.i18n.getMessage("confirmCloseAll");
@@ -699,6 +702,43 @@ async function reloadCurrentIndexTabChildren() {
     );
   } catch (error) {
     console.error("タブの再読み込みに失敗しました:", error);
+  }
+}
+
+// 現在のIndex Tabの配下タブ（右側〜次のIndex Tab手前）をすべて休止（discard）
+async function discardCurrentIndexTabChildren() {
+  try {
+    if (!chrome.tabs || typeof chrome.tabs.discard !== "function") {
+      throw new Error("tabs.discard API is not available");
+    }
+
+    const thisTab = await getCurrentIndexTab();
+    if (!thisTab || !thisTab.id) return;
+
+    const allTabs = await queryAllTabsForContext();
+    const tabIdsToDiscard = [];
+
+    for (let i = thisTab.index + 1; i < allTabs.length; i++) {
+      const tab = allTabs[i];
+      if (tab.url && tab.url.startsWith(chrome.runtime.getURL("tabs.html"))) {
+        break;
+      }
+      if (tab && typeof tab.id === "number") {
+        tabIdsToDiscard.push(tab.id);
+      }
+    }
+
+    await Promise.allSettled(
+      tabIdsToDiscard.map(async (tabId) => {
+        try {
+          await chrome.tabs.discard(tabId);
+        } catch {
+          // ignore individual discard failures
+        }
+      })
+    );
+  } catch (error) {
+    console.error("タブの休止に失敗しました:", error);
   }
 }
 
