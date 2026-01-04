@@ -5,6 +5,20 @@
 let cachedIsSidePanelContext = null;
 let boundWindowIdForSidePanel = null;
 
+const TAB_LIST_WHEEL_BEHAVIOR_KEY = "tabListWheelBehavior";
+const TAB_LIST_WHEEL_BEHAVIOR_DEFAULT = "switchTabs"; // 新機能のデフォルト
+let tabListWheelBehavior = TAB_LIST_WHEEL_BEHAVIOR_DEFAULT;
+
+async function loadTabListWheelBehaviorSetting() {
+  try {
+    const result = await chrome.storage.local.get(TAB_LIST_WHEEL_BEHAVIOR_KEY);
+    const value = result[TAB_LIST_WHEEL_BEHAVIOR_KEY];
+    tabListWheelBehavior = value || TAB_LIST_WHEEL_BEHAVIOR_DEFAULT;
+  } catch {
+    tabListWheelBehavior = TAB_LIST_WHEEL_BEHAVIOR_DEFAULT;
+  }
+}
+
 async function getIsSidePanelContextCached() {
   if (cachedIsSidePanelContext !== null) return cachedIsSidePanelContext;
   cachedIsSidePanelContext = await isSidePanelContext();
@@ -660,6 +674,9 @@ function setupSettingsPopup() {
   const closeButton = document.getElementById("closeSettingsButton");
   const iconClickActionSelect = document.getElementById("iconClickAction");
   const newIndexTabColorSelect = document.getElementById("newIndexTabColor");
+  const tabListWheelBehaviorSelect = document.getElementById(
+    "tabListWheelBehavior"
+  );
 
   if (
     !settingsButton ||
@@ -667,7 +684,8 @@ function setupSettingsPopup() {
     !settingsPopup ||
     !closeButton ||
     !iconClickActionSelect ||
-    !newIndexTabColorSelect
+    !newIndexTabColorSelect ||
+    !tabListWheelBehaviorSelect
   )
     return;
 
@@ -708,26 +726,39 @@ function setupSettingsPopup() {
     const color = e.target.value;
     await chrome.storage.local.set({ newIndexTabColor: color });
   });
+
+  tabListWheelBehaviorSelect.addEventListener("change", async (e) => {
+    const behavior = e.target.value;
+    tabListWheelBehavior = behavior || TAB_LIST_WHEEL_BEHAVIOR_DEFAULT;
+    await chrome.storage.local.set({ [TAB_LIST_WHEEL_BEHAVIOR_KEY]: tabListWheelBehavior });
+  });
 }
 
 // 設定を読み込む
 async function loadSettings() {
   const iconClickActionSelect = document.getElementById("iconClickAction");
   const newIndexTabColorSelect = document.getElementById("newIndexTabColor");
+  const tabListWheelBehaviorSelect = document.getElementById(
+    "tabListWheelBehavior"
+  );
 
-  if (!iconClickActionSelect || !newIndexTabColorSelect) return;
+  if (!iconClickActionSelect || !newIndexTabColorSelect || !tabListWheelBehaviorSelect) return;
 
   // ストレージから設定を取得
   const result = await chrome.storage.local.get([
     "iconClickAction",
     "newIndexTabColor",
+    TAB_LIST_WHEEL_BEHAVIOR_KEY,
   ]);
   const action = result.iconClickAction || "createTab"; // デフォルトはタブ作成
   const color = result.newIndexTabColor || "rotate"; // デフォルトは順番に変える
+  const wheelBehavior = result[TAB_LIST_WHEEL_BEHAVIOR_KEY] || TAB_LIST_WHEEL_BEHAVIOR_DEFAULT;
 
   // selectの値を設定
   iconClickActionSelect.value = action;
   newIndexTabColorSelect.value = color;
+  tabListWheelBehaviorSelect.value = wheelBehavior;
+  tabListWheelBehavior = wheelBehavior;
 }
 
 // 現在のIndex Tabのみを閉じる
@@ -1697,6 +1728,137 @@ function setupAddNewTabOnTabListBlankDblClick() {
   });
 }
 
+function setupWheelTabSwitchOnTabList() {
+  const tabListElement = document.getElementById("tabList");
+  if (!tabListElement) return;
+
+  const outerElement = document.querySelector(".container") || document.body;
+
+  // 仕様: サイドパネル表示時のみ、タブリスト上のホイール上下で前後タブへ切替
+  // 連続イベント（特にトラックパッド）対策として、一定量のdeltaを積算しスロットルする
+  let accumulatedDeltaY = 0;
+  let lastWheelAt = 0;
+  let lockedUntil = 0;
+  const resetWindowMs = 250;
+  const threshold = 20;
+  const lockMs = 140;
+
+  const shouldIgnoreWheelBecauseUi = (e) => {
+    // 設定モーダル等の操作中は奪わない
+    const settingsModal = document.getElementById("settingsModal");
+    if (settingsModal && settingsModal.classList.contains("show")) return true;
+
+    // 入力系の上では奪わない
+    const target = e && e.target;
+    if (target && target.closest) {
+      if (target.closest("input, textarea, select, button")) return true;
+      if (target.closest("#menuDropdownMenu, #colorPickerDropdownMenu")) return true;
+    }
+    return false;
+  };
+
+  const shouldHandleWheelInBottomWhitespace = (e) => {
+    // tabListの外側、かつ「tabListの下」にいる場合のみ対象
+    const target = e && e.target;
+    if (target && target.closest && target.closest("#tabList")) return false;
+
+    const rect = tabListElement.getBoundingClientRect();
+    if (typeof e.clientY !== "number") return false;
+    return e.clientY >= rect.bottom;
+  };
+
+  const handleWheelSwitch = async (e) => {
+    // サイドパネル以外（Index Tabを通常タブで開いた場合）はスクロールを妨げない
+    if (!cachedIsSidePanelContext) return;
+
+    // 設定がスクロールの場合は従来通り（何もしない）
+    if (tabListWheelBehavior !== "switchTabs") return;
+
+    // ピンチズーム等の意図しないwheelは無視
+    if (e.ctrlKey) return;
+
+    if (shouldIgnoreWheelBecauseUi(e)) return;
+    if (isUserInteracting()) return;
+
+    const now = Date.now();
+    if (now < lockedUntil) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    const dy = typeof e.deltaY === "number" ? e.deltaY : 0;
+    if (dy === 0) return;
+
+    // タブ切替を行う場合のみスクロールを抑止
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (now - lastWheelAt > resetWindowMs) {
+      accumulatedDeltaY = 0;
+    }
+    lastWheelAt = now;
+    accumulatedDeltaY += dy;
+
+    if (Math.abs(accumulatedDeltaY) < threshold) return;
+
+    const direction = accumulatedDeltaY > 0 ? 1 : -1;
+    accumulatedDeltaY = 0;
+    lockedUntil = now + lockMs;
+
+    const tabItems = Array.from(tabListElement.querySelectorAll(".tab-item"));
+    if (tabItems.length === 0) return;
+
+    const activeEl = tabListElement.querySelector(".tab-item.active-tab");
+    let targetIndex = -1;
+    if (activeEl) {
+      const currentIndex = tabItems.indexOf(activeEl);
+      if (currentIndex === -1) return;
+      targetIndex = currentIndex + direction;
+    } else {
+      // アクティブタブがこのリスト内に無い場合は「下方向」で先頭へ
+      if (direction > 0) targetIndex = 0;
+      else return;
+    }
+
+    if (targetIndex < 0 || targetIndex >= tabItems.length) return;
+
+    const targetEl = tabItems[targetIndex];
+    const tabId = targetEl && targetEl.dataset ? parseInt(targetEl.dataset.tabId, 10) : NaN;
+    if (!tabId) return;
+
+    await activateTab(tabId);
+  };
+
+  tabListElement.addEventListener(
+    "wheel",
+    async (e) => {
+      try {
+        await handleWheelSwitch(e);
+      } catch (error) {
+        console.error("ホイールによるタブ切り替えに失敗しました:", error);
+      }
+    },
+    { passive: false }
+  );
+
+  // tabListの下の余白（.container / body）でもホイールで切替
+  if (outerElement) {
+    outerElement.addEventListener(
+      "wheel",
+      async (e) => {
+        try {
+          if (!shouldHandleWheelInBottomWhitespace(e)) return;
+          await handleWheelSwitch(e);
+        } catch (error) {
+          console.error("ホイールによるタブ切り替えに失敗しました:", error);
+        }
+      },
+      { passive: false }
+    );
+  }
+}
+
 // 一番左にIndex Tabを作成する関数
 async function createIndexTabAtStart() {
   try {
@@ -2017,6 +2179,39 @@ async function updateTabList() {
   displayTabs(tabs);
 }
 
+async function scrollActiveTabItemIntoViewIfNeeded() {
+  // 要求: サイドパネル表示時に、アクティブタブ変更で対象要素を画面内に収める
+  // -> onActivated から呼ばれる前提。DOM反映直後に実行し、見切れている場合のみスクロールする。
+  const tabListElement = document.getElementById("tabList");
+  if (!tabListElement) return;
+
+  // レイアウト確定を待つ（displayTabs直後はrectが安定しないことがある）
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+
+  if (isUserInteracting()) return;
+
+  const activeEl = tabListElement.querySelector(".tab-item.active-tab");
+  if (!activeEl) return;
+
+  const containerRect = tabListElement.getBoundingClientRect();
+  const activeRect = activeEl.getBoundingClientRect();
+  const fullyVisible =
+    activeRect.top >= containerRect.top && activeRect.bottom <= containerRect.bottom;
+
+  if (fullyVisible) return;
+
+  try {
+    activeEl.scrollIntoView({ block: "nearest", inline: "nearest" });
+  } catch {
+    // 古い実装向けフォールバック
+    try {
+      activeEl.scrollIntoView();
+    } catch {
+      // ignore
+    }
+  }
+}
+
 let scheduledTabListUpdateTimer = null;
 function scheduleUpdateTabList(delayMs = 50) {
   if (scheduledTabListUpdateTimer) {
@@ -2137,6 +2332,9 @@ function setupTabListeners() {
       }
       // アクティブタブのハイライト表示のため、常にタブリストは更新
       await requestUpdateTabListNow();
+
+      // アクティブタブが変わったら、その要素が見切れていれば画面内に収める
+      await scrollActiveTabItemIntoViewIfNeeded();
     } else {
       // Index Tabページの場合
       scheduleUpdateTabList(0);
@@ -2215,6 +2413,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     await ensureBoundWindowIdForSidePanel();
   }
 
+  // 設定を事前に読み込む（ホイール動作など）
+  await loadTabListWheelBehaviorSetting();
+
+  // 他コンテキストで変更された場合も追従
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local") return;
+    const change = changes[TAB_LIST_WHEEL_BEHAVIOR_KEY];
+    if (!change) return;
+    tabListWheelBehavior = change.newValue || TAB_LIST_WHEEL_BEHAVIOR_DEFAULT;
+  });
+
   // i18n初期化
   initI18n();
 
@@ -2226,6 +2435,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // tabListの下側余白ダブルクリックで末尾に新規タブを追加
   setupAddNewTabOnTabListBlankDblClick();
+
+  // サイドパネル: タブリスト上のホイール上下で前後タブへ切替
+  setupWheelTabSwitchOnTabList();
 
   // タイトル編集機能のセットアップ
   setupTitleEditor();

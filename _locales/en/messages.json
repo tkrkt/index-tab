@@ -161,5 +161,17 @@
   "newIndexTabColorRotate": {
     "message": "Rotate colors",
     "description": "Option to rotate colors"
+  },
+  "tabListWheelBehaviorLabel": {
+    "message": "Wheel behavior on tab list",
+    "description": "Label for wheel behavior on tab list"
+  },
+  "tabListWheelBehaviorSwitchTabs": {
+    "message": "Switch tabs",
+    "description": "Wheel behavior on tab list: switch tabs"
+  },
+  "tabListWheelBehaviorScroll": {
+    "message": "Scroll",
+    "description": "Wheel behavior on tab list: scroll"
   }
 }

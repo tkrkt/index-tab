@@ -162,5 +162,17 @@
   "newIndexTabColorRotate": {
     "message": "順番に変える",
     "description": "色を順番に変える選択肢"
+  },
+  "tabListWheelBehaviorLabel": {
+    "message": "タブリスト上でホイールした時の動作",
+    "description": "タブリスト上のホイール動作設定のラベル"
+  },
+  "tabListWheelBehaviorSwitchTabs": {
+    "message": "タブ切り替え",
+    "description": "タブリスト上のホイール動作: タブ切り替え"
+  },
+  "tabListWheelBehaviorScroll": {
+    "message": "スクロール",
+    "description": "タブリスト上のホイール動作: スクロール"
   }
 }
