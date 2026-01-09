@@ -1014,7 +1014,28 @@ async function updateIndexTabBar() {
         "Index Tabがありません";
       const emptyElement = document.createElement("div");
       emptyElement.className = "index-tab-bar-empty";
-      emptyElement.textContent = message;
+
+      const messageElement = document.createElement("span");
+      messageElement.className = "index-tab-bar-empty-message";
+      messageElement.textContent = message;
+
+      const createButton = document.createElement("button");
+      createButton.type = "button";
+      createButton.className = "index-tab-bar-empty-add-button";
+      createButton.textContent = "+";
+      const createTitle =
+        chrome.i18n.getMessage("createIndexTabAtCurrent") ||
+        chrome.i18n.getMessage("commandCreateIndexTab") ||
+        "現在位置にIndex Tabを作成";
+      createButton.title = createTitle;
+      createButton.setAttribute("aria-label", createTitle);
+      createButton.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await createIndexTabAtStart();
+      });
+
+      emptyElement.appendChild(messageElement);
+      emptyElement.appendChild(createButton);
       tabBar.appendChild(emptyElement);
       return;
     }
@@ -1977,12 +1998,8 @@ async function createIndexTabAtStart() {
 // 現在位置にIndex Tabを作成する関数
 async function createIndexTabAtCurrentPosition() {
   try {
-    // 現在アクティブなタブの位置を取得
-    const [activeTab] = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
-
+    // 現在アクティブなタブの位置を取得（サイドパネル対応）
+    const activeTab = await queryActiveTabForContext();
     if (!activeTab) return;
 
     // アクティブなタブと同じ位置に新しいIndex Tabページを作成
@@ -1990,6 +2007,7 @@ async function createIndexTabAtCurrentPosition() {
     const newTab = await chrome.tabs.create({
       url: buildIndexTabUrlWithId(indexTabId),
       index: activeTab.index,
+      windowId: activeTab.windowId,
       active: true, // アクティブにする
     });
 

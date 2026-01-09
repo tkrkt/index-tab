@@ -1,3 +1,8 @@
+:root {
+  /* DEFAULT_COLOR (#4285f4) のRGB。JSでユーザ選択色に更新される */
+  --index-tab-accent-rgb: 66 133 244;
+}
+
 body {
   margin: 0;
   padding: 20px;
@@ -37,10 +42,45 @@ body {
 .index-tab-bar-empty {
   flex: 1;
   padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   text-align: center;
   color: #666;
   font-size: 13px;
   user-select: none;
+}
+
+.index-tab-bar-empty-message {
+  display: inline-block;
+}
+
+.index-tab-bar-empty-add-button {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #e0e0e0;
+  background-color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+  color: #666;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+}
+
+.index-tab-bar-empty-add-button:hover {
+  background-color: #e3f2fd;
+  color: #4285f4;
+  border-color: #4285f4;
+}
+
+.index-tab-bar-empty-add-button:active {
+  background-color: #bbdefb;
 }
 
 .index-tab {
