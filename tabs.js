@@ -263,7 +263,133 @@ function buildIndexTabUrlWithId(indexTabId) {
 // ベストエフォートのクリーンアップ用（同一セッション内のみ）
 const indexTabKeySuffixByTabId = new Map();
 
+// 旧形式（移行のためにのみ参照）
 const INDEX_TAB_META_PREFIX = "indexTabMeta_";
+const LEGACY_INDEX_TAB_COLOR_PREFIX = "tabColor_";
+const LEGACY_INDEX_TAB_TITLE_PREFIX = "tabTitle_";
+
+// 新形式: IndexTabごとの永続データは 1 レコードにまとめる
+// key: indexTab_<indexTabId>
+// val: { color, title, createdAt, lastSeenAt, lastClosedAt }
+const INDEX_TAB_RECORD_PREFIX = "indexTab_";
+
+function getIndexTabRecordKey(suffix) {
+  return `${INDEX_TAB_RECORD_PREFIX}${suffix}`;
+}
+
+function getDefaultIndexTabTitle() {
+  return chrome.i18n.getMessage("defaultTabTitle") || "Index Tab";
+}
+
+function normalizeIndexTabRecord(record, now) {
+  const safeNow = typeof now === "number" ? now : Date.now();
+  const base = record && typeof record === "object" ? record : {};
+
+  const createdAt = typeof base.createdAt === "number" ? base.createdAt : safeNow;
+  const lastSeenAt = typeof base.lastSeenAt === "number" ? base.lastSeenAt : createdAt;
+  const lastClosedAt = base.lastClosedAt === null || typeof base.lastClosedAt === "number" ? base.lastClosedAt : null;
+
+  const color = typeof base.color === "string" && base.color ? base.color : DEFAULT_COLOR;
+  const title = typeof base.title === "string" && base.title ? base.title : getDefaultIndexTabTitle();
+
+  return { color, title, createdAt, lastSeenAt, lastClosedAt };
+}
+
+async function migrateLegacyIndexTabDataIfNeeded(suffix) {
+  const recordKey = getIndexTabRecordKey(suffix);
+
+  try {
+    const existing = await chrome.storage.local.get(recordKey);
+    const already = existing[recordKey];
+    if (already && typeof already === "object") {
+      return normalizeIndexTabRecord(already, Date.now());
+    }
+  } catch {
+    // ignore
+  }
+
+  const legacyColorKey = `${LEGACY_INDEX_TAB_COLOR_PREFIX}${suffix}`;
+  const legacyTitleKey = `${LEGACY_INDEX_TAB_TITLE_PREFIX}${suffix}`;
+  const legacyMetaKey = `${INDEX_TAB_META_PREFIX}${suffix}`;
+
+  let legacy;
+  try {
+    legacy = await chrome.storage.local.get([legacyColorKey, legacyTitleKey, legacyMetaKey]);
+  } catch {
+    return null;
+  }
+
+  const hasLegacy =
+    legacyColorKey in legacy ||
+    legacyTitleKey in legacy ||
+    (legacy[legacyMetaKey] && typeof legacy[legacyMetaKey] === "object");
+
+  if (!hasLegacy) return null;
+
+  const now = Date.now();
+  const meta = legacy[legacyMetaKey] && typeof legacy[legacyMetaKey] === "object" ? legacy[legacyMetaKey] : {};
+
+  const record = normalizeIndexTabRecord(
+    {
+      color: legacy[legacyColorKey] ?? DEFAULT_COLOR,
+      title: legacy[legacyTitleKey] ?? getDefaultIndexTabTitle(),
+      createdAt: typeof meta.createdAt === "number" ? meta.createdAt : now,
+      lastSeenAt: typeof meta.lastSeenAt === "number" ? meta.lastSeenAt : (typeof meta.createdAt === "number" ? meta.createdAt : now),
+      lastClosedAt: meta.lastClosedAt ?? null,
+    },
+    now
+  );
+
+  try {
+    await chrome.storage.local.set({ [recordKey]: record });
+    await chrome.storage.local.remove([legacyColorKey, legacyTitleKey, legacyMetaKey]);
+  } catch {
+    // ignore
+  }
+
+  return record;
+}
+
+async function getIndexTabRecord(suffix, { createIfMissing = true } = {}) {
+  const recordKey = getIndexTabRecordKey(suffix);
+
+  try {
+    const result = await chrome.storage.local.get(recordKey);
+    const record = result[recordKey];
+    if (record && typeof record === "object") {
+      return normalizeIndexTabRecord(record, Date.now());
+    }
+  } catch {
+    // ignore
+  }
+
+  const migrated = await migrateLegacyIndexTabDataIfNeeded(suffix);
+  if (migrated) return migrated;
+
+  if (!createIfMissing) return null;
+
+  const now = Date.now();
+  const created = normalizeIndexTabRecord({}, now);
+  try {
+    await chrome.storage.local.set({ [recordKey]: created });
+  } catch {
+    // ignore
+  }
+  return created;
+}
+
+async function patchIndexTabRecord(suffix, patch) {
+  const recordKey = getIndexTabRecordKey(suffix);
+  const now = Date.now();
+  const current = await getIndexTabRecord(suffix, { createIfMissing: true });
+  const next = normalizeIndexTabRecord({ ...current, ...(patch && typeof patch === "object" ? patch : {}) }, now);
+  try {
+    await chrome.storage.local.set({ [recordKey]: next });
+  } catch {
+    // ignore
+  }
+  return next;
+}
 
 async function getCurrentIndexTabPersistentId() {
   const indexTab = await getCurrentIndexTab();
@@ -288,23 +414,13 @@ async function getCurrentIndexTabPersistentId() {
 async function touchCurrentIndexTabMeta(patch) {
   const indexTabId = await getCurrentIndexTabPersistentId();
   if (!indexTabId) return;
-  const metaKey = `${INDEX_TAB_META_PREFIX}${indexTabId}`;
   const now = Date.now();
 
-  try {
-    const existing = await chrome.storage.local.get(metaKey);
-    const prev = existing[metaKey] && typeof existing[metaKey] === "object" ? existing[metaKey] : {};
-    await chrome.storage.local.set({
-      [metaKey]: {
-        createdAt: typeof prev.createdAt === "number" ? prev.createdAt : now,
-        lastSeenAt: now,
-        lastClosedAt: prev.lastClosedAt ?? null,
-        ...patch,
-      },
-    });
-  } catch {
-    // ignore
-  }
+  // 新形式レコードに統合（lastSeenAtは常に更新）
+  await patchIndexTabRecord(indexTabId, {
+    ...(patch && typeof patch === "object" ? patch : {}),
+    lastSeenAt: now,
+  });
 }
 
 async function getCurrentIndexTabStorageKeySuffix() {
@@ -395,11 +511,7 @@ function setBackgroundColor(color) {
 async function saveColor(color) {
   const suffix = await getCurrentIndexTabStorageKeySuffix();
   if (!suffix) return;
-  const key = `tabColor_${suffix}`;
-  await chrome.storage.local.set({ [key]: color });
-
-  // 永続IDのIndex Tabなら「最近使った」を更新
-  await touchCurrentIndexTabMeta({ lastSeenAt: Date.now() });
+  await patchIndexTabRecord(suffix, { color, lastSeenAt: Date.now() });
 }
 
 // 色を読み込む関数
@@ -407,20 +519,9 @@ async function loadColor() {
   const suffix = await getCurrentIndexTabStorageKeySuffix();
   if (!suffix) return DEFAULT_COLOR;
 
-  const key = `tabColor_${suffix}`;
-  const result = await chrome.storage.local.get(key);
-  const color = result[key];
-
-  // ストレージに値がない場合はデフォルト値を保存
-  if (!color) {
-    await chrome.storage.local.set({ [key]: DEFAULT_COLOR });
-    await touchCurrentIndexTabMeta({ lastSeenAt: Date.now() });
-    return DEFAULT_COLOR;
-  }
-
-  await touchCurrentIndexTabMeta({ lastSeenAt: Date.now() });
-
-  return color;
+  const record = await getIndexTabRecord(suffix, { createIfMissing: true });
+  await touchCurrentIndexTabMeta({});
+  return record && typeof record.color === "string" ? record.color : DEFAULT_COLOR;
 }
 
 // 色のUIを更新する共通関数
@@ -556,10 +657,7 @@ function setupColorPickerDropdown() {
 async function saveTitle(title) {
   const suffix = await getCurrentIndexTabStorageKeySuffix();
   if (!suffix) return;
-  const key = `tabTitle_${suffix}`;
-  await chrome.storage.local.set({ [key]: title });
-
-  await touchCurrentIndexTabMeta({ lastSeenAt: Date.now() });
+  await patchIndexTabRecord(suffix, { title, lastSeenAt: Date.now() });
 }
 
 // タイトルのUIを更新する共通関数
@@ -588,20 +686,9 @@ async function loadTitle() {
   const defaultTitle = chrome.i18n.getMessage("defaultTabTitle") || "Index Tab";
   if (!suffix) return defaultTitle;
 
-  const key = `tabTitle_${suffix}`;
-  const result = await chrome.storage.local.get(key);
-  const title = result[key];
-
-  // ストレージに値がない場合はデフォルト値を保存
-  if (!title) {
-    await chrome.storage.local.set({ [key]: defaultTitle });
-    await touchCurrentIndexTabMeta({ lastSeenAt: Date.now() });
-    return defaultTitle;
-  }
-
-  await touchCurrentIndexTabMeta({ lastSeenAt: Date.now() });
-
-  return title;
+  const record = await getIndexTabRecord(suffix, { createIfMissing: true });
+  await touchCurrentIndexTabMeta({});
+  return record && typeof record.title === "string" ? record.title : defaultTitle;
 }
 
 // ページタイトルの編集機能をセットアップ
@@ -1020,15 +1107,11 @@ async function updateIndexTabBar() {
 
       indexTabKeySuffixByTabId.set(indexTab.id, keySuffix);
 
-      const colorKey = `tabColor_${keySuffix}`;
-      const colorResult = await chrome.storage.local.get(colorKey);
-      const color = colorResult[colorKey] || DEFAULT_COLOR;
+      const record = await getIndexTabRecord(keySuffix, { createIfMissing: true });
 
-      const titleKey = `tabTitle_${keySuffix}`;
-      const titleResult = await chrome.storage.local.get(titleKey);
-      const defaultTitle =
-        chrome.i18n.getMessage("defaultTabTitle") || "Index Tab";
-      const title = titleResult[titleKey] || defaultTitle;
+      const color = record && typeof record.color === "string" ? record.color : DEFAULT_COLOR;
+      const defaultTitle = chrome.i18n.getMessage("defaultTabTitle") || "Index Tab";
+      const title = record && typeof record.title === "string" ? record.title : defaultTitle;
 
       // このIndexTabの右側にあるタブ数をカウント
       const indexTabPosition = allTabs.findIndex((t) => t.id === indexTab.id);
@@ -1632,22 +1715,18 @@ function setupIndexNavigation() {
         if (thisTab && thisTab.id) {
           const persistentId = getIndexTabIdFromUrl(thisTab.url);
           const keySuffix = persistentId || String(thisTab.id);
-          const colorKey = `tabColor_${keySuffix}`;
-          const titleKey = `tabTitle_${keySuffix}`;
+          const recordKey = getIndexTabRecordKey(keySuffix);
 
-          // 色の変更を検知
-          if (changes[colorKey]) {
-            const newColor = changes[colorKey].newValue;
-            if (newColor) {
-              updateColorUI(newColor);
-            }
-          }
-
-          // タイトルの変更を検知
-          if (changes[titleKey]) {
-            const newTitle = changes[titleKey].newValue;
-            if (newTitle) {
-              updateTitleUI(newTitle);
+          // 統合レコードの変更を検知（色/タイトル/メタ）
+          if (changes[recordKey]) {
+            const next = changes[recordKey].newValue;
+            if (next && typeof next === "object") {
+              if (typeof next.color === "string" && next.color) {
+                updateColorUI(next.color);
+              }
+              if (typeof next.title === "string" && next.title) {
+                updateTitleUI(next.title);
+              }
             }
           }
         }
@@ -2064,17 +2143,19 @@ async function createIndexTabAtStart() {
     // 新しいタブのストレージをデフォルト値で初期化
     if (newTab && newTab.id) {
       const keySuffix = indexTabId;
-      const colorKey = `tabColor_${keySuffix}`;
-      const titleKey = `tabTitle_${keySuffix}`;
       const defaultTitle =
         chrome.i18n.getMessage("defaultTabTitle") || "Index Tab";
 
       // 設定に基づいて色を決定
       const newColor = await getNextIndexTabColor();
 
-      await chrome.storage.local.set({
-        [colorKey]: newColor,
-        [titleKey]: defaultTitle,
+      const now = Date.now();
+      await patchIndexTabRecord(keySuffix, {
+        color: newColor,
+        title: defaultTitle,
+        createdAt: now,
+        lastSeenAt: now,
+        lastClosedAt: null,
       });
     }
 
@@ -2108,17 +2189,19 @@ async function createIndexTabAtCurrentPosition() {
     // 新しいタブのストレージをデフォルト値で初期化
     if (newTab && newTab.id) {
       const keySuffix = indexTabId;
-      const colorKey = `tabColor_${keySuffix}`;
-      const titleKey = `tabTitle_${keySuffix}`;
       const defaultTitle =
         chrome.i18n.getMessage("defaultTabTitle") || "Index Tab";
 
       // 設定に基づいて色を決定
       const newColor = await getNextIndexTabColor();
 
-      await chrome.storage.local.set({
-        [colorKey]: newColor,
-        [titleKey]: defaultTitle,
+      const now = Date.now();
+      await patchIndexTabRecord(keySuffix, {
+        color: newColor,
+        title: defaultTitle,
+        createdAt: now,
+        lastSeenAt: now,
+        lastClosedAt: null,
       });
     }
 
@@ -2449,21 +2532,8 @@ function setupTabListeners() {
     // 永続ID(IndexTabId)の色/タイトルは「閉じても残す」
     const keySuffix = indexTabKeySuffixByTabId.get(tabId);
     if (keySuffix) {
-      const metaKey = `${INDEX_TAB_META_PREFIX}${keySuffix}`;
       const now = Date.now();
-      try {
-        const existing = await chrome.storage.local.get(metaKey);
-        const prev = existing[metaKey] && typeof existing[metaKey] === "object" ? existing[metaKey] : {};
-        await chrome.storage.local.set({
-          [metaKey]: {
-            createdAt: typeof prev.createdAt === "number" ? prev.createdAt : now,
-            lastSeenAt: typeof prev.lastSeenAt === "number" ? prev.lastSeenAt : now,
-            lastClosedAt: now,
-          },
-        });
-      } catch {
-        // ignore
-      }
+      await patchIndexTabRecord(keySuffix, { lastClosedAt: now });
     }
     indexTabKeySuffixByTabId.delete(tabId);
 
@@ -2572,8 +2642,6 @@ async function addIndexTabAtPosition(targetTabIndex) {
     // 新しいタブのストレージをクリア（古いデータが残らないようにする）
     if (newTab && newTab.id) {
       const keySuffix = indexTabId;
-      const colorKey = `tabColor_${keySuffix}`;
-      const titleKey = `tabTitle_${keySuffix}`;
       const defaultTitle =
         chrome.i18n.getMessage("defaultTabTitle") || "Index Tab";
 
@@ -2581,9 +2649,13 @@ async function addIndexTabAtPosition(targetTabIndex) {
       const newColor = await getNextIndexTabColor();
 
       // 明示的にデフォルト値を設定
-      await chrome.storage.local.set({
-        [colorKey]: newColor,
-        [titleKey]: defaultTitle,
+      const now = Date.now();
+      await patchIndexTabRecord(keySuffix, {
+        color: newColor,
+        title: defaultTitle,
+        createdAt: now,
+        lastSeenAt: now,
+        lastClosedAt: null,
       });
 
       // 新しく作成したタブをアクティブにする

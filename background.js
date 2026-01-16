@@ -2,13 +2,40 @@
 const DEFAULT_COLOR = "#4285f4";
 
 const INDEX_TAB_URL = chrome.runtime.getURL("tabs.html");
+// 旧形式（移行のためにのみ参照）
 const INDEX_TAB_META_PREFIX = "indexTabMeta_";
+const LEGACY_INDEX_TAB_COLOR_PREFIX = "tabColor_";
+const LEGACY_INDEX_TAB_TITLE_PREFIX = "tabTitle_";
+
+// 新形式: IndexTabごとの永続データは 1 レコードにまとめる
+// key: indexTab_<indexTabId>
+// val: { color, title, createdAt, lastSeenAt, lastClosedAt }
+const INDEX_TAB_RECORD_PREFIX = "indexTab_";
 
 // 起動時/操作時に走らせるGC
-// - 閉じても tabColor_/tabTitle_ は保持
+// - IndexTabの永続データは indexTab_<id> を保持
 // - ただし上限超過/長期未使用は掃除
+// - 旧形式(tabColor_/tabTitle_/indexTabMeta_)は可能なら移行して掃除
 const INDEX_TAB_GC_MAX_ENTRIES = 200;
 const INDEX_TAB_GC_RETENTION_DAYS = 90;
+
+function getIndexTabRecordKey(id) {
+  return `${INDEX_TAB_RECORD_PREFIX}${id}`;
+}
+
+function normalizeIndexTabRecord(record, now) {
+  const safeNow = typeof now === "number" ? now : Date.now();
+  const base = record && typeof record === "object" ? record : {};
+
+  const createdAt = typeof base.createdAt === "number" ? base.createdAt : safeNow;
+  const lastSeenAt = typeof base.lastSeenAt === "number" ? base.lastSeenAt : createdAt;
+  const lastClosedAt = base.lastClosedAt === null || typeof base.lastClosedAt === "number" ? base.lastClosedAt : null;
+
+  const color = typeof base.color === "string" && base.color ? base.color : DEFAULT_COLOR;
+  const title = typeof base.title === "string" && base.title ? base.title : "Index Tab";
+
+  return { color, title, createdAt, lastSeenAt, lastClosedAt };
+}
 
 function getIndexTabIdFromUrl(url) {
   if (!url) return null;
@@ -50,46 +77,98 @@ async function runIndexTabGarbageCollection(reason = "") {
     const persistentIds = new Set();
 
     for (const key of Object.keys(all)) {
-      if (key.startsWith("tabColor_") || key.startsWith("tabTitle_")) {
-        const suffix = key.slice(key.indexOf("_") + 1);
-        if (suffix) {
-          persistentIds.add(suffix);
-        }
+      if (key.startsWith(INDEX_TAB_RECORD_PREFIX)) {
+        const id = key.slice(INDEX_TAB_RECORD_PREFIX.length);
+        if (id) persistentIds.add(id);
+        continue;
       }
+
+      // 旧形式キーも拾って移行/掃除対象に含める
+      if (key.startsWith(LEGACY_INDEX_TAB_COLOR_PREFIX) || key.startsWith(LEGACY_INDEX_TAB_TITLE_PREFIX)) {
+        const suffix = key.slice(key.indexOf("_") + 1);
+        if (suffix) persistentIds.add(suffix);
+        continue;
+      }
+
       if (key.startsWith(INDEX_TAB_META_PREFIX)) {
         const id = key.slice(INDEX_TAB_META_PREFIX.length);
         if (id) persistentIds.add(id);
+        continue;
       }
     }
 
-    // 開いている永続IDはメタをtouch（lastSeenAt更新）
-    const metaUpdates = {};
-    for (const id of openPersistentIds) {
-      const metaKey = `${INDEX_TAB_META_PREFIX}${id}`;
-      const prev = all[metaKey] && typeof all[metaKey] === "object" ? all[metaKey] : {};
-      metaUpdates[metaKey] = {
-        createdAt: typeof prev.createdAt === "number" ? prev.createdAt : now,
-        lastSeenAt: now,
-        lastClosedAt: prev.lastClosedAt ?? null,
-      };
-    }
-
-    const entries = [];
-    for (const id of persistentIds) {
-      const isOpen = openPersistentIds.has(id);
-      const metaKey = `${INDEX_TAB_META_PREFIX}${id}`;
-      const meta = all[metaKey] && typeof all[metaKey] === "object" ? all[metaKey] : null;
-      const lastSeenAt = meta && typeof meta.lastSeenAt === "number" ? meta.lastSeenAt : 0;
-      entries.push({ id, isOpen, lastSeenAt });
-    }
-
+    // 旧形式 -> 新形式への移行 + openのtouch
+    const recordUpdates = {};
     const keysToRemove = [];
 
-    // 旧形式(tabId suffix)は対応しない方針なので、数値suffixは一括削除対象
     for (const id of persistentIds) {
+      const recordKey = getIndexTabRecordKey(id);
+      const legacyColorKey = `${LEGACY_INDEX_TAB_COLOR_PREFIX}${id}`;
+      const legacyTitleKey = `${LEGACY_INDEX_TAB_TITLE_PREFIX}${id}`;
+      const legacyMetaKey = `${INDEX_TAB_META_PREFIX}${id}`;
+
+      // 旧形式(tabId suffix)は対応しない方針なので、数値suffixは一括削除対象
       if (isNumericSuffix(id)) {
-        keysToRemove.push(`tabColor_${id}`, `tabTitle_${id}`, `${INDEX_TAB_META_PREFIX}${id}`);
+        keysToRemove.push(recordKey, legacyColorKey, legacyTitleKey, legacyMetaKey);
+        continue;
       }
+
+      const existingRecord = all[recordKey] && typeof all[recordKey] === "object" ? all[recordKey] : null;
+
+      if (!existingRecord) {
+        const hasLegacy =
+          legacyColorKey in all ||
+          legacyTitleKey in all ||
+          (all[legacyMetaKey] && typeof all[legacyMetaKey] === "object");
+
+        if (hasLegacy) {
+          const meta = all[legacyMetaKey] && typeof all[legacyMetaKey] === "object" ? all[legacyMetaKey] : {};
+          const migrated = normalizeIndexTabRecord(
+            {
+              color: all[legacyColorKey] ?? DEFAULT_COLOR,
+              title: all[legacyTitleKey] ?? "Index Tab",
+              createdAt: typeof meta.createdAt === "number" ? meta.createdAt : now,
+              lastSeenAt: typeof meta.lastSeenAt === "number" ? meta.lastSeenAt : (typeof meta.createdAt === "number" ? meta.createdAt : now),
+              lastClosedAt: meta.lastClosedAt ?? null,
+            },
+            now
+          );
+          recordUpdates[recordKey] = migrated;
+          keysToRemove.push(legacyColorKey, legacyTitleKey, legacyMetaKey);
+        }
+      }
+
+      // 開いているIDは lastSeenAt を更新（新旧どちらでも）
+      if (openPersistentIds.has(id)) {
+        const base =
+          (recordKey in recordUpdates && typeof recordUpdates[recordKey] === "object")
+            ? recordUpdates[recordKey]
+            : (existingRecord || null);
+
+        const touched = normalizeIndexTabRecord(
+          {
+            ...(base && typeof base === "object" ? base : {}),
+            lastSeenAt: now,
+          },
+          now
+        );
+        recordUpdates[recordKey] = touched;
+      }
+    }
+
+    // GC判断用のentriesを組み立てる
+    const entries = [];
+    for (const id of persistentIds) {
+      if (isNumericSuffix(id)) continue;
+      const isOpen = openPersistentIds.has(id);
+      const recordKey = getIndexTabRecordKey(id);
+      const record =
+        (recordKey in recordUpdates && typeof recordUpdates[recordKey] === "object")
+          ? recordUpdates[recordKey]
+          : (all[recordKey] && typeof all[recordKey] === "object" ? all[recordKey] : null);
+
+      const lastSeenAt = record && typeof record.lastSeenAt === "number" ? record.lastSeenAt : 0;
+      entries.push({ id, isOpen, lastSeenAt });
     }
 
     // 次に、永続IDは保持しつつ、長期未使用は削除対象（openは除外）
@@ -98,11 +177,8 @@ async function runIndexTabGarbageCollection(reason = "") {
       .map((e) => e.id);
 
     for (const id of staleIds) {
-      keysToRemove.push(
-        `tabColor_${id}`,
-        `tabTitle_${id}`,
-        `${INDEX_TAB_META_PREFIX}${id}`
-      );
+      const recordKey = getIndexTabRecordKey(id);
+      keysToRemove.push(recordKey);
     }
 
     // 件数上限超過なら、closedの古い順(0優先)に削る
@@ -114,19 +190,16 @@ async function runIndexTabGarbageCollection(reason = "") {
       closed.sort((a, b) => (a.lastSeenAt || 0) - (b.lastSeenAt || 0));
       const overflow = closed.slice(0, closed.length - keepBudget);
       for (const e of overflow) {
-        keysToRemove.push(
-          `tabColor_${e.id}`,
-          `tabTitle_${e.id}`,
-          `${INDEX_TAB_META_PREFIX}${e.id}`
-        );
+        const recordKey = getIndexTabRecordKey(e.id);
+        keysToRemove.push(recordKey);
       }
     }
 
     // 重複削除をまとめる
     const uniq = Array.from(new Set(keysToRemove));
 
-    if (Object.keys(metaUpdates).length > 0) {
-      await chrome.storage.local.set(metaUpdates);
+    if (Object.keys(recordUpdates).length > 0) {
+      await chrome.storage.local.set(recordUpdates);
     }
     if (uniq.length > 0) {
       await chrome.storage.local.remove(uniq);
@@ -244,23 +317,24 @@ async function createIndexTab() {
     // 新しいタブの色とタイトルを設定
     if (newTab && newTab.id) {
       const keySuffix = indexTabId;
-      const colorKey = `tabColor_${keySuffix}`;
-      const titleKey = `tabTitle_${keySuffix}`;
-
-      const metaKey = `${INDEX_TAB_META_PREFIX}${keySuffix}`;
       const now = Date.now();
+
+      const recordKey = getIndexTabRecordKey(keySuffix);
 
       // 設定に基づいて色を決定
       const newColor = await getNextIndexTabColor();
 
       await chrome.storage.local.set({
-        [colorKey]: newColor,
-        [titleKey]: "Index Tab",
-        [metaKey]: {
-          createdAt: now,
-          lastSeenAt: now,
-          lastClosedAt: null,
-        },
+        [recordKey]: normalizeIndexTabRecord(
+          {
+            color: newColor,
+            title: "Index Tab",
+            createdAt: now,
+            lastSeenAt: now,
+            lastClosedAt: null,
+          },
+          now
+        ),
       });
 
       await runIndexTabGarbageCollection("createIndexTab");
@@ -350,23 +424,24 @@ chrome.action.onClicked.addListener(async (tab) => {
   // 新しいタブの色とタイトルを設定
   if (newTab && newTab.id) {
     const keySuffix = indexTabId;
-    const colorKey = `tabColor_${keySuffix}`;
-    const titleKey = `tabTitle_${keySuffix}`;
-
-    const metaKey = `${INDEX_TAB_META_PREFIX}${keySuffix}`;
     const now = Date.now();
+
+    const recordKey = getIndexTabRecordKey(keySuffix);
 
     // 設定に基づいて色を決定
     const newColor = await getNextIndexTabColor();
 
     await chrome.storage.local.set({
-      [colorKey]: newColor,
-      [titleKey]: "Index Tab",
-      [metaKey]: {
-        createdAt: now,
-        lastSeenAt: now,
-        lastClosedAt: null,
-      },
+      [recordKey]: normalizeIndexTabRecord(
+        {
+          color: newColor,
+          title: "Index Tab",
+          createdAt: now,
+          lastSeenAt: now,
+          lastClosedAt: null,
+        },
+        now
+      ),
     });
 
     await runIndexTabGarbageCollection("action.onClicked");
