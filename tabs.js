@@ -268,7 +268,21 @@ const INDEX_TAB_META_PREFIX = "indexTabMeta_";
 async function getCurrentIndexTabPersistentId() {
   const indexTab = await getCurrentIndexTab();
   if (!indexTab || !indexTab.url) return null;
-  return getIndexTabIdFromUrl(indexTab.url);
+  const existing = getIndexTabIdFromUrl(indexTab.url);
+  if (existing) return existing;
+
+  // 旧形式（indexTabId無し）を見つけた場合は、この場で永続IDを付与して移行する
+  if (typeof indexTab.id === "number") {
+    const newId = generateIndexTabId();
+    try {
+      await chrome.tabs.update(indexTab.id, { url: buildIndexTabUrlWithId(newId) });
+    } catch {
+      // ignore
+    }
+    return newId;
+  }
+
+  return null;
 }
 
 async function touchCurrentIndexTabMeta(patch) {
@@ -294,10 +308,7 @@ async function touchCurrentIndexTabMeta(patch) {
 }
 
 async function getCurrentIndexTabStorageKeySuffix() {
-  const indexTab = await getCurrentIndexTab();
-  if (!indexTab) return null;
-  const persistentId = getIndexTabIdFromUrl(indexTab.url);
-  return persistentId || (indexTab.id ? String(indexTab.id) : null);
+  return await getCurrentIndexTabPersistentId();
 }
 
 // 利用可能な色のリスト
@@ -993,8 +1004,19 @@ async function updateIndexTabBar() {
     // 各タブの色とタイトルを取得して状態を作成
     const indexTabsData = [];
     for (const indexTab of indexTabs) {
-      const indexTabId = getIndexTabIdFromUrl(indexTab.url);
-      const keySuffix = indexTabId || String(indexTab.id);
+      let keySuffix = getIndexTabIdFromUrl(indexTab.url);
+      if (!keySuffix && typeof indexTab.id === "number") {
+        const newId = generateIndexTabId();
+        try {
+          await chrome.tabs.update(indexTab.id, { url: buildIndexTabUrlWithId(newId) });
+        } catch {
+          // ignore
+        }
+        // URL更新でリロードが走るため、この周回はスキップして次回更新に任せる
+        continue;
+      }
+
+      if (!keySuffix) continue;
 
       indexTabKeySuffixByTabId.set(indexTab.id, keySuffix);
 
@@ -2424,14 +2446,9 @@ function setupTabListeners() {
   // タブが削除されたとき
   chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
     if (!(await shouldHandleEventForWindow(removeInfo.windowId))) return;
-    // legacy(tabId)キーは、復元してもtabIdが変わるためクリーンアップしてよい
-    const legacyColorKey = `tabColor_${tabId}`;
-    const legacyTitleKey = `tabTitle_${tabId}`;
-    await chrome.storage.local.remove([legacyColorKey, legacyTitleKey]);
-
     // 永続ID(IndexTabId)の色/タイトルは「閉じても残す」
     const keySuffix = indexTabKeySuffixByTabId.get(tabId);
-    if (keySuffix && keySuffix !== String(tabId)) {
+    if (keySuffix) {
       const metaKey = `${INDEX_TAB_META_PREFIX}${keySuffix}`;
       const now = Date.now();
       try {

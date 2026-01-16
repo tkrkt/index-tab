@@ -27,20 +27,16 @@ function isNumericSuffix(suffix) {
 async function listOpenIndexTabInfo() {
   const allTabs = await chrome.tabs.query({});
   const openPersistentIds = new Set();
-  const openNumericSuffixes = new Set();
 
   for (const tab of allTabs) {
     if (!tab || !tab.url || !tab.url.startsWith(INDEX_TAB_URL)) continue;
     const indexTabId = getIndexTabIdFromUrl(tab.url);
     if (indexTabId) {
       openPersistentIds.add(indexTabId);
-    } else if (typeof tab.id === "number") {
-      // 旧形式（indexTabId無し）: tab.id を suffix に使う
-      openNumericSuffixes.add(String(tab.id));
     }
   }
 
-  return { openPersistentIds, openNumericSuffixes };
+  return { openPersistentIds };
 }
 
 async function runIndexTabGarbageCollection(reason = "") {
@@ -48,18 +44,15 @@ async function runIndexTabGarbageCollection(reason = "") {
   const retentionMs = INDEX_TAB_GC_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
   try {
-    const { openPersistentIds, openNumericSuffixes } = await listOpenIndexTabInfo();
+    const { openPersistentIds } = await listOpenIndexTabInfo();
     const all = await chrome.storage.local.get(null);
 
     const persistentIds = new Set();
-    const legacyNumericSuffixes = new Set();
 
     for (const key of Object.keys(all)) {
       if (key.startsWith("tabColor_") || key.startsWith("tabTitle_")) {
         const suffix = key.slice(key.indexOf("_") + 1);
-        if (isNumericSuffix(suffix)) {
-          legacyNumericSuffixes.add(suffix);
-        } else if (suffix) {
+        if (suffix) {
           persistentIds.add(suffix);
         }
       }
@@ -90,17 +83,18 @@ async function runIndexTabGarbageCollection(reason = "") {
       entries.push({ id, isOpen, lastSeenAt });
     }
 
-    // まず、旧形式(tabId suffix)のキーは「開いているものだけ」残す
     const keysToRemove = [];
-    for (const suffix of legacyNumericSuffixes) {
-      if (!openNumericSuffixes.has(suffix)) {
-        keysToRemove.push(`tabColor_${suffix}`, `tabTitle_${suffix}`);
+
+    // 旧形式(tabId suffix)は対応しない方針なので、数値suffixは一括削除対象
+    for (const id of persistentIds) {
+      if (isNumericSuffix(id)) {
+        keysToRemove.push(`tabColor_${id}`, `tabTitle_${id}`, `${INDEX_TAB_META_PREFIX}${id}`);
       }
     }
 
     // 次に、永続IDは保持しつつ、長期未使用は削除対象（openは除外）
     const staleIds = entries
-      .filter((e) => !e.isOpen && e.lastSeenAt > 0 && now - e.lastSeenAt > retentionMs)
+      .filter((e) => !e.isOpen && !isNumericSuffix(e.id) && e.lastSeenAt > 0 && now - e.lastSeenAt > retentionMs)
       .map((e) => e.id);
 
     for (const id of staleIds) {
@@ -114,7 +108,7 @@ async function runIndexTabGarbageCollection(reason = "") {
     // 件数上限超過なら、closedの古い順(0優先)に削る
     const openCount = entries.filter((e) => e.isOpen).length;
     const keepBudget = Math.max(0, INDEX_TAB_GC_MAX_ENTRIES - openCount);
-    const closed = entries.filter((e) => !e.isOpen);
+    const closed = entries.filter((e) => !e.isOpen && !isNumericSuffix(e.id));
 
     if (closed.length > keepBudget) {
       closed.sort((a, b) => (a.lastSeenAt || 0) - (b.lastSeenAt || 0));
