@@ -1,235 +1,36 @@
 // デフォルトの色
 const DEFAULT_COLOR = "#4285f4";
-
-const INDEX_TAB_URL = chrome.runtime.getURL("tabs.html");
-// 旧形式（移行のためにのみ参照）
+// 旧形式/過去実装の残骸（互換クリーンアップ用）
 const INDEX_TAB_META_PREFIX = "indexTabMeta_";
 const LEGACY_INDEX_TAB_COLOR_PREFIX = "tabColor_";
 const LEGACY_INDEX_TAB_TITLE_PREFIX = "tabTitle_";
+const LEGACY_INDEX_TAB_RECORD_PREFIX = "indexTab_";
 
-// 新形式: IndexTabごとの永続データは 1 レコードにまとめる
-// key: indexTab_<indexTabId>
-// val: { color, title, createdAt, lastSeenAt, lastClosedAt }
-const INDEX_TAB_RECORD_PREFIX = "indexTab_";
-
-// 起動時/操作時に走らせるGC
-// - IndexTabの永続データは indexTab_<id> を保持
-// - ただし上限超過/長期未使用は掃除
-// - 旧形式(tabColor_/tabTitle_/indexTabMeta_)は可能なら移行して掃除
-const INDEX_TAB_GC_MAX_ENTRIES = 200;
-const INDEX_TAB_GC_RETENTION_DAYS = 90;
-
-function getIndexTabRecordKey(id) {
-  return `${INDEX_TAB_RECORD_PREFIX}${id}`;
-}
-
-function normalizeIndexTabRecord(record, now) {
-  const safeNow = typeof now === "number" ? now : Date.now();
-  const base = record && typeof record === "object" ? record : {};
-
-  const createdAt = typeof base.createdAt === "number" ? base.createdAt : safeNow;
-  const lastSeenAt = typeof base.lastSeenAt === "number" ? base.lastSeenAt : createdAt;
-  const lastClosedAt = base.lastClosedAt === null || typeof base.lastClosedAt === "number" ? base.lastClosedAt : null;
-
-  const color = typeof base.color === "string" && base.color ? base.color : DEFAULT_COLOR;
-  const title = typeof base.title === "string" && base.title ? base.title : "Index Tab";
-
-  return { color, title, createdAt, lastSeenAt, lastClosedAt };
-}
-
-function getIndexTabIdFromUrl(url) {
-  if (!url) return null;
+async function cleanupLegacyIndexTabStorage(reason = "") {
   try {
-    const u = new URL(url);
-    return u.searchParams.get("indexTabId");
-  } catch {
-    return null;
-  }
-}
-
-function isNumericSuffix(suffix) {
-  return typeof suffix === "string" && /^\d+$/.test(suffix);
-}
-
-async function listOpenIndexTabInfo() {
-  const allTabs = await chrome.tabs.query({});
-  const openPersistentIds = new Set();
-
-  for (const tab of allTabs) {
-    if (!tab || !tab.url || !tab.url.startsWith(INDEX_TAB_URL)) continue;
-    const indexTabId = getIndexTabIdFromUrl(tab.url);
-    if (indexTabId) {
-      openPersistentIds.add(indexTabId);
-    }
-  }
-
-  return { openPersistentIds };
-}
-
-async function runIndexTabGarbageCollection(reason = "") {
-  const now = Date.now();
-  const retentionMs = INDEX_TAB_GC_RETENTION_DAYS * 24 * 60 * 60 * 1000;
-
-  try {
-    const { openPersistentIds } = await listOpenIndexTabInfo();
     const all = await chrome.storage.local.get(null);
-
-    const persistentIds = new Set();
-
-    for (const key of Object.keys(all)) {
-      if (key.startsWith(INDEX_TAB_RECORD_PREFIX)) {
-        const id = key.slice(INDEX_TAB_RECORD_PREFIX.length);
-        if (id) persistentIds.add(id);
-        continue;
-      }
-
-      // 旧形式キーも拾って移行/掃除対象に含める
-      if (key.startsWith(LEGACY_INDEX_TAB_COLOR_PREFIX) || key.startsWith(LEGACY_INDEX_TAB_TITLE_PREFIX)) {
-        const suffix = key.slice(key.indexOf("_") + 1);
-        if (suffix) persistentIds.add(suffix);
-        continue;
-      }
-
-      if (key.startsWith(INDEX_TAB_META_PREFIX)) {
-        const id = key.slice(INDEX_TAB_META_PREFIX.length);
-        if (id) persistentIds.add(id);
-        continue;
-      }
-    }
-
-    // 旧形式 -> 新形式への移行 + openのtouch
-    const recordUpdates = {};
-    const keysToRemove = [];
-
-    for (const id of persistentIds) {
-      const recordKey = getIndexTabRecordKey(id);
-      const legacyColorKey = `${LEGACY_INDEX_TAB_COLOR_PREFIX}${id}`;
-      const legacyTitleKey = `${LEGACY_INDEX_TAB_TITLE_PREFIX}${id}`;
-      const legacyMetaKey = `${INDEX_TAB_META_PREFIX}${id}`;
-
-      // 旧形式(tabId suffix)は対応しない方針なので、数値suffixは一括削除対象
-      if (isNumericSuffix(id)) {
-        keysToRemove.push(recordKey, legacyColorKey, legacyTitleKey, legacyMetaKey);
-        continue;
-      }
-
-      const existingRecord = all[recordKey] && typeof all[recordKey] === "object" ? all[recordKey] : null;
-
-      if (!existingRecord) {
-        const hasLegacy =
-          legacyColorKey in all ||
-          legacyTitleKey in all ||
-          (all[legacyMetaKey] && typeof all[legacyMetaKey] === "object");
-
-        if (hasLegacy) {
-          const meta = all[legacyMetaKey] && typeof all[legacyMetaKey] === "object" ? all[legacyMetaKey] : {};
-          const migrated = normalizeIndexTabRecord(
-            {
-              color: all[legacyColorKey] ?? DEFAULT_COLOR,
-              title: all[legacyTitleKey] ?? "Index Tab",
-              createdAt: typeof meta.createdAt === "number" ? meta.createdAt : now,
-              lastSeenAt: typeof meta.lastSeenAt === "number" ? meta.lastSeenAt : (typeof meta.createdAt === "number" ? meta.createdAt : now),
-              lastClosedAt: meta.lastClosedAt ?? null,
-            },
-            now
-          );
-          recordUpdates[recordKey] = migrated;
-          keysToRemove.push(legacyColorKey, legacyTitleKey, legacyMetaKey);
-        }
-      }
-
-      // 開いているIDは lastSeenAt を更新（新旧どちらでも）
-      if (openPersistentIds.has(id)) {
-        const base =
-          (recordKey in recordUpdates && typeof recordUpdates[recordKey] === "object")
-            ? recordUpdates[recordKey]
-            : (existingRecord || null);
-
-        const touched = normalizeIndexTabRecord(
-          {
-            ...(base && typeof base === "object" ? base : {}),
-            lastSeenAt: now,
-          },
-          now
-        );
-        recordUpdates[recordKey] = touched;
-      }
-    }
-
-    // GC判断用のentriesを組み立てる
-    const entries = [];
-    for (const id of persistentIds) {
-      if (isNumericSuffix(id)) continue;
-      const isOpen = openPersistentIds.has(id);
-      const recordKey = getIndexTabRecordKey(id);
-      const record =
-        (recordKey in recordUpdates && typeof recordUpdates[recordKey] === "object")
-          ? recordUpdates[recordKey]
-          : (all[recordKey] && typeof all[recordKey] === "object" ? all[recordKey] : null);
-
-      const lastSeenAt = record && typeof record.lastSeenAt === "number" ? record.lastSeenAt : 0;
-      entries.push({ id, isOpen, lastSeenAt });
-    }
-
-    // 次に、永続IDは保持しつつ、長期未使用は削除対象（openは除外）
-    const staleIds = entries
-      .filter((e) => !e.isOpen && !isNumericSuffix(e.id) && e.lastSeenAt > 0 && now - e.lastSeenAt > retentionMs)
-      .map((e) => e.id);
-
-    for (const id of staleIds) {
-      const recordKey = getIndexTabRecordKey(id);
-      keysToRemove.push(recordKey);
-    }
-
-    // 件数上限超過なら、closedの古い順(0優先)に削る
-    const openCount = entries.filter((e) => e.isOpen).length;
-    const keepBudget = Math.max(0, INDEX_TAB_GC_MAX_ENTRIES - openCount);
-    const closed = entries.filter((e) => !e.isOpen && !isNumericSuffix(e.id));
-
-    if (closed.length > keepBudget) {
-      closed.sort((a, b) => (a.lastSeenAt || 0) - (b.lastSeenAt || 0));
-      const overflow = closed.slice(0, closed.length - keepBudget);
-      for (const e of overflow) {
-        const recordKey = getIndexTabRecordKey(e.id);
-        keysToRemove.push(recordKey);
-      }
-    }
-
-    // 重複削除をまとめる
-    const uniq = Array.from(new Set(keysToRemove));
-
-    if (Object.keys(recordUpdates).length > 0) {
-      await chrome.storage.local.set(recordUpdates);
-    }
-    if (uniq.length > 0) {
-      await chrome.storage.local.remove(uniq);
-    }
-
+    const keysToRemove = Object.keys(all).filter((key) =>
+      key.startsWith(LEGACY_INDEX_TAB_RECORD_PREFIX) ||
+      key.startsWith(INDEX_TAB_META_PREFIX) ||
+      key.startsWith(LEGACY_INDEX_TAB_COLOR_PREFIX) ||
+      key.startsWith(LEGACY_INDEX_TAB_TITLE_PREFIX)
+    );
+    if (keysToRemove.length === 0) return;
+    await chrome.storage.local.remove(keysToRemove);
     if (reason) {
-      console.debug("IndexTab GC done:", reason, { removed: uniq.length });
+      console.debug("IndexTab legacy storage cleaned:", reason, { removed: keysToRemove.length });
     }
   } catch (error) {
-    console.warn("IndexTab GC failed:", reason, error);
+    console.warn("IndexTab legacy storage cleanup failed:", reason, error);
   }
 }
 
-function generateIndexTabId() {
-  try {
-    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
-      return globalThis.crypto.randomUUID();
-    }
-  } catch {
-    // ignore
-  }
-
-  const rand = Math.random().toString(16).slice(2);
-  return `it_${Date.now().toString(16)}_${rand}`;
-}
-
-function buildIndexTabUrlWithId(indexTabId) {
+function buildIndexTabUrl(_indexTabIdIgnored, { color = null, title = null } = {}) {
   const base = chrome.runtime.getURL("tabs.html");
-  if (!indexTabId) return base;
-  return `${base}?indexTabId=${encodeURIComponent(indexTabId)}`;
+  const u = new URL(base);
+  if (typeof color === "string" && color) u.searchParams.set("c", color);
+  if (typeof title === "string" && title) u.searchParams.set("t", title);
+  return u.toString();
 }
 
 // 利用可能な色のリスト
@@ -308,37 +109,13 @@ async function queryActiveTabForContext() {
 async function createIndexTab() {
   const currentTab = await queryActiveTabForContext();
   if (currentTab) {
-    const indexTabId = generateIndexTabId();
-    const newTab = await chrome.tabs.create({
-      url: buildIndexTabUrlWithId(indexTabId),
+    const newColor = await getNextIndexTabColor();
+    const newTitle = "Index Tab";
+
+    await chrome.tabs.create({
+      url: buildIndexTabUrl(null, { color: newColor, title: newTitle }),
       index: currentTab.index,
     });
-
-    // 新しいタブの色とタイトルを設定
-    if (newTab && newTab.id) {
-      const keySuffix = indexTabId;
-      const now = Date.now();
-
-      const recordKey = getIndexTabRecordKey(keySuffix);
-
-      // 設定に基づいて色を決定
-      const newColor = await getNextIndexTabColor();
-
-      await chrome.storage.local.set({
-        [recordKey]: normalizeIndexTabRecord(
-          {
-            color: newColor,
-            title: "Index Tab",
-            createdAt: now,
-            lastSeenAt: now,
-            lastClosedAt: null,
-          },
-          now
-        ),
-      });
-
-      await runIndexTabGarbageCollection("createIndexTab");
-    }
   }
 }
 
@@ -414,38 +191,13 @@ chrome.action.onClicked.addListener(async (tab) => {
   const baseTab = tab || (await queryActiveTabForContext());
   const index = baseTab && typeof baseTab.index === 'number' ? baseTab.index : 0;
 
-  const indexTabId = generateIndexTabId();
+  const newColor = await getNextIndexTabColor();
+  const newTitle = "Index Tab";
 
-  const newTab = await chrome.tabs.create({
-    url: buildIndexTabUrlWithId(indexTabId),
+  await chrome.tabs.create({
+    url: buildIndexTabUrl(null, { color: newColor, title: newTitle }),
     index,
   });
-
-  // 新しいタブの色とタイトルを設定
-  if (newTab && newTab.id) {
-    const keySuffix = indexTabId;
-    const now = Date.now();
-
-    const recordKey = getIndexTabRecordKey(keySuffix);
-
-    // 設定に基づいて色を決定
-    const newColor = await getNextIndexTabColor();
-
-    await chrome.storage.local.set({
-      [recordKey]: normalizeIndexTabRecord(
-        {
-          color: newColor,
-          title: "Index Tab",
-          createdAt: now,
-          lastSeenAt: now,
-          lastClosedAt: null,
-        },
-        now
-      ),
-    });
-
-    await runIndexTabGarbageCollection("action.onClicked");
-  }
 });
 
 // ストレージの変更を監視して設定が変わったらパネルの動作を更新
@@ -458,12 +210,12 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 // 拡張機能インストール/起動時に設定を読み込んで適用
 chrome.runtime.onInstalled.addListener(() => {
   updatePanelBehavior();
-  runIndexTabGarbageCollection("runtime.onInstalled");
+  cleanupLegacyIndexTabStorage("runtime.onInstalled");
 });
 
 chrome.runtime.onStartup.addListener(() => {
   updatePanelBehavior();
-  runIndexTabGarbageCollection("runtime.onStartup");
+  cleanupLegacyIndexTabStorage("runtime.onStartup");
 });
 
 // ショートカットキーが押されたときの処理
@@ -476,5 +228,5 @@ chrome.commands.onCommand.addListener(async (command) => {
     await goToRightIndexTab();
   }
 
-  await runIndexTabGarbageCollection(`commands.onCommand:${command}`);
+  // URL-only のため、IndexTab永続データのGCは不要
 });
