@@ -1024,9 +1024,9 @@ async function updateIndexTabBar() {
       createButton.className = "index-tab-bar-empty-add-button";
       createButton.textContent = "+";
       const createTitle =
-        chrome.i18n.getMessage("createIndexTabAtCurrent") ||
+        chrome.i18n.getMessage("createIndexTabAtStart") ||
         chrome.i18n.getMessage("commandCreateIndexTab") ||
-        "現在位置にIndex Tabを作成";
+        "一番左にIndex Tabを作成";
       createButton.title = createTitle;
       createButton.setAttribute("aria-label", createTitle);
       createButton.addEventListener("click", async (e) => {
@@ -1038,6 +1038,37 @@ async function updateIndexTabBar() {
       emptyElement.appendChild(createButton);
       tabBar.appendChild(emptyElement);
       return;
+    }
+
+    // 「すでにタブはあるが、左にIndex Tabが無いためアクティブが無い」状態（サイドパネル限定）
+    // → 左端に「+のみのタブ」を追加して、先頭にIndex Tab を作れるようにする
+    if (!currentTab && !thisTab && indexTabsData.length > 0) {
+      const activeTab = await queryActiveTabForContext();
+      const firstIndexTabIndex = Math.min(...indexTabsData.map((t) => t.index));
+
+      if (
+        activeTab &&
+        typeof activeTab.index === "number" &&
+        activeTab.index < firstIndexTabIndex
+      ) {
+        const addStartTab = document.createElement("button");
+        addStartTab.type = "button";
+        addStartTab.className = "index-tab-add-start";
+        addStartTab.textContent = "+";
+
+        const addStartTitle =
+          chrome.i18n.getMessage("createIndexTabAtStart") ||
+          "一番左にIndex Tabを作成";
+        addStartTab.title = addStartTitle;
+        addStartTab.setAttribute("aria-label", addStartTitle);
+
+        addStartTab.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          await createIndexTabAtStart();
+        });
+
+        tabBar.appendChild(addStartTab);
+      }
     }
 
     // 各Index Tabページのタブを作成

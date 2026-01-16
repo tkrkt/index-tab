@@ -83,6 +83,33 @@ body {
   background-color: #bbdefb;
 }
 
+.index-tab-add-start {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-right: 1px solid #e0e0e0;
+  background-color: white;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  min-width: 48px;
+  height: 40px;
+  box-sizing: border-box;
+  color: #333;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.index-tab-add-start:hover {
+  background-color: #f5f5f5;
+}
+
+.index-tab-add-start:active {
+  background-color: #e8e8e8;
+}
+
 .index-tab {
   display: flex;
   align-items: center;
